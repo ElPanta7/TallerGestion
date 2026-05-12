@@ -383,7 +383,7 @@ export default function RepPCCore({ viewMode = "both" }) {
   const [pendingExcl, setPendingExcl] = useState(false);
   const [showSigCliente, setShowSigCliente] = useState(false);
   const [showSigTecnico, setShowSigTecnico] = useState(false);
-
+  const [mesFilter, setMesFilter] = useState("todos");
   const [form, setForm] = useState({
     nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "",
     estado: "recibido", prioridad: "normal",
@@ -479,6 +479,25 @@ export default function RepPCCore({ viewMode = "both" }) {
   const filtActivos = filtAll.filter(o => o.estado !== "entregado");
   const filtEntregs = filtAll.filter(o => o.estado === "entregado");
   const filtByStatus = statusFilter === "todos" ? filtActivos : filtActivos.filter(o => o.estado === statusFilter);
+  function parseMonto(str) {
+    if (!str) return 0;
+    const n = parseFloat(str.replace(/[^0-9.,]/g, "").replace(/\./g, "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+  function getMesAnio(fechaStr) {
+    if (!fechaStr) return null;
+    const [datePart] = fechaStr.split(",");
+    const parts = datePart.trim().split("/");
+    if (parts.length < 3) return null;
+    return parts[1] + "/" + parts[2];
+  }
+  const MESES_NOMBRE = { "01": "Enero", "02": "Febrero", "03": "Marzo", "04": "Abril", "05": "Mayo", "06": "Junio", "07": "Julio", "08": "Agosto", "09": "Septiembre", "10": "Octubre", "11": "Noviembre", "12": "Diciembre" };
+  const entregsConMes = filtEntregs.map(o => ({ ...o, mesAnio: getMesAnio(o.fecha), monto: parseMonto(o.costoFinal) }));
+  const mesesDisponibles = [...new Set(entregsConMes.map(o => o.mesAnio).filter(Boolean))].sort().reverse();
+  const entregsFiltrados = mesFilter === "todos" ? filtEntregs : filtEntregs.filter(o => getMesAnio(o.fecha) === mesFilter);
+  const totalRecaudado = entregsConMes.reduce((s, o) => s + o.monto, 0);
+  const totalMesFiltrado = mesFilter === "todos" ? totalRecaudado : entregsConMes.filter(o => o.mesAnio === mesFilter).reduce((s, o) => s + o.monto, 0);
+  const cantMesFiltrado = entregsFiltrados.length;
 
   function buscarOrden() { const f = orders.find(o => (o.id || "").toLowerCase() === cliCode.trim().toLowerCase()); if (f) setCliId(f.id); else alert("No se encontro una orden con ese codigo."); }
 
@@ -534,19 +553,51 @@ export default function RepPCCore({ viewMode = "both" }) {
                       </div>
                     )}
 
-                    {listTab === "activos" && (
-                      filtByStatus.length === 0
-                        ? <div className="empty"><div className="ei">📭</div><p className="emp">No hay ordenes{statusFilter !== "todos" ? " en este estado" : ""}.<br />Presiona + para crear una.</p></div>
-                        : filtByStatus.map(o => {
-                          const est = ESTADOS.find(e => e.key === o.estado);
-                          return (
-                            <div key={o.id} className="card" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
-                              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                <span className="cid">{o.id}</span>
-                                <div>{o.prioridad === "exclusiva" && <span className="bdg b-go">⭐</span>}{o.acelerada && <span className="bdg b-bl">🚀</span>}</div>
+                   {listTab === "entregados" && (
+                      <>
+                        {filtEntregs.length > 0 && (
+                          <div style={{ margin: "0 14px 12px" }}>
+                            <div style={{ background: "linear-gradient(135deg, #064E3B, #0F2040)", border: "1px solid #6EE7B7", borderRadius: 14, padding: 16 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                                <div style={{ fontSize: 11, color: "#6EE7B7", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Recaudacion</div>
+                                <div style={{ fontSize: 11, color: "#6EE7B7" }}>{filtEntregs.length} orden{filtEntregs.length !== 1 ? "es" : ""}</div>
                               </div>
-                              <div className="cnm">{o.nombre}</div>
-                              <div className="cdv">{o.marca}</div>
+                              <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                                <div style={{ flex: 1, background: "rgba(110,231,183,.08)", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 10, color: "#6EE7B7", fontWeight: 600, marginBottom: 4 }}>TOTAL HISTORICO</div>
+                                  <div style={{ fontSize: 20, fontWeight: 800, color: "#6EE7B7", fontFamily: "var(--mo)" }}>{fmt(totalRecaudado)}</div>
+                                </div>
+                                {mesFilter !== "todos" && (
+                                  <div style={{ flex: 1, background: "rgba(6,182,212,.08)", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                                    <div style={{ fontSize: 10, color: "var(--cy)", fontWeight: 600, marginBottom: 4 }}>{(() => { const [m] = mesFilter.split("/"); return (MESES_NOMBRE[m] || mesFilter).toUpperCase(); })()}</div>
+                                    <div style={{ fontSize: 20, fontWeight: 800, color: "var(--cy)", fontFamily: "var(--mo)" }}>{fmt(totalMesFiltrado)}</div>
+                                    <div style={{ fontSize: 10, color: "var(--mu)", marginTop: 2 }}>{cantMesFiltrado} orden{cantMesFiltrado !== 1 ? "es" : ""}</div>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                <button className={"filt" + (mesFilter === "todos" ? " on" : "")} onClick={() => setMesFilter("todos")} style={{ fontSize: 10 }}>Todos</button>
+                                {mesesDisponibles.map(ma => {
+                                  const [m, y] = ma.split("/");
+                                  return <button key={ma} className={"filt" + (mesFilter === ma ? " on" : "")} onClick={() => setMesFilter(ma)} style={{ fontSize: 10 }}>{(MESES_NOMBRE[m] || m) + " " + y}</button>;
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {entregsFiltrados.length === 0
+                          ? <div className="empty"><div className="ei">🎉</div><p className="emp">{mesFilter !== "todos" ? "No hay entregas en este mes." : "No hay equipos entregados aun."}</p></div>
+                          : entregsFiltrados.map(o => (
+                            <div key={o.id} className="card del" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
+                              <div style={{ display: "flex", justifyContent: "space-between" }}><span className="cid cid-g">{o.id}</span><span style={{ fontSize: 11, color: "#6EE7B7", fontWeight: 700 }}>ENTREGADO</span></div>
+                              <div className="cnm">{o.nombre}</div><div className="cdv">{o.marca}</div>
+                              <div className="cdt">{o.fecha}</div>
+                              {o.costoFinal && <div style={{ marginTop: 6, fontSize: 13, color: "#6EE7B7", fontWeight: 700 }}>{o.costoFinal}</div>}
+                            </div>
+                          ))
+                        }
+                      </>
+                    )}
                               <span className="cst" style={{ color: est?.color }}>{est?.icon} {est?.label}</span>
                               <div className="cdt">{o.fecha}</div>
                             </div>
