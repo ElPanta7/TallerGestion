@@ -736,7 +736,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                         <div className="fg"><label>Trabajo realizado</label><textarea value={selO.trabajoRealizado || ""} onChange={e => updO(selO.id, { trabajoRealizado: e.target.value })} placeholder="Describe todo lo que se hizo..." /></div>
                         <button className="btn b-cy" style={{ marginBottom: 8 }} onClick={() => {
                           addEv(selO.id, "✅", "Aviso enviado - equipo listo para retirar");
-                          sharePres("Hola " + selO.nombre + "!\n\nTu equipo esta listo para retirar.\n\nOrden: " + selO.id + "\nEquipo: " + selO.marca + "\n" + (selO.costoFinal ? "Costo final: " + selO.costoFinal + "\n" : "") + "\nRecorda que tenes 30 dias para retirarlo sin cargo adicional. Accedé a nuestra web para ver el estado actual colocando el código de tu orden. \n\nRepPC");
+                          sharePres("Hola " + selO.nombre + "!\n\nTu equipo esta listo para retirar.\n\nOrden: " + selO.id + "\nEquipo: " + selO.marca + "\n" + (selO.costoFinal ? "Costo final: " + selO.costoFinal + "\n" : "") + "\nRecorda que tenes 30 dias para retirarlo sin cargo adicional. Accedé a nuestra web para ver el estado actual colocando el código de tu orden. https://taller-gestion-bay.vercel.app/cliente .  \n\nRepPC");
                         }}>Enviar aviso - equipo listo para retirar</button>
                       </div>
                     </>
