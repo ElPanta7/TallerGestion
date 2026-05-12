@@ -686,7 +686,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                           <button className="btn b-cy" onClick={() => {
                             updO(selO.id, { estado: "presupuesto", presupuestoRespuesta: null });
                             addEv(selO.id, "📋", "Presupuesto enviado - " + selO.presupuestoMonto);
-                            sharePres("Hola " + selO.nombre + "!\n\nDiagnostico de tu equipo:\n" + selO.id + " - " + selO.marca + "\n\nDiagnostico: " + (selO.diagnostico || "Ver en la app") + "\nPresupuesto: " + selO.presupuestoMonto + "\n\nIngresa tu codigo en:\n" + TALLER.clientUrl + "\n\nRepPC");
+                            sharePres("Hola " + selO.nombre + "!\nDiagnostico de tu equipo " + selO.marca + "\nProblema: " + (selO.diagnostico || "-") + "\nPresupuesto aproximado de reparacion: " + selO.presupuestoMonto + "\n\nIngresa tu codigo " + selO.id + " en:\n" + TALLER.clientUrl + "\npara aceptar o rechazar la reparacion, o responde este mensaje. Gracias.\nRepPC");
                           }}>Enviar presupuesto al cliente</button>
                         ) : (
                           <div style={{ fontSize: 12, color: "var(--mu)", padding: "6px 0" }}>Completa el monto para enviar el presupuesto.</div>
