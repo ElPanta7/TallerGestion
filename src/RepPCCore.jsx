@@ -741,7 +741,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                       </>
                     )}
                     {selO.prioridadPendiente && (
-                      <div className="bn-yw" style={{ marginTop: 8 }}>⏳ Cliente solicito Premium - Pendiente confirmación</div>
+                      <div style={{ marginTop: 8, display: "flex", gap: 8, flexDirection: "column" }}>
+                        <div className="bn-yw">⏳ Cliente solicito Premium - Pendiente confirmación</div>
+                        <button className="btn b-yw" onClick={() => { updO(selO.id, { prioridadPendiente: false }); addEv(selO.id, "❌", "Admin cancelo solicitud de Premium"); }}>Cancelar solicitud</button>
+                      </div>
                     )}
                   </div>
 
@@ -949,10 +952,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                           <button className="btn b-yw" style={{ marginTop: 8 }} onClick={() => setModal("premiumModal")}>¿Deseas cambiar la prioridad de reparación?</button>
                         </div>
                       )}
-                      {o.prioridad === "premium" && (
+                      {o.prioridad === "premium" && !o.prioridadPendiente && (
                         <div className="bn-go">💎 Tu equipo tiene Prioridad Premium - Saltás la cola de espera</div>
                       )}
-                      {o.prioridadPendiente && (
+                      {o.prioridadPendiente && o.prioridad !== "premium" && (
                         <div className="bn-yw">⏳ Tu solicitud de Prioridad Premium está pendiente de confirmación</div>
                       )}
                     </div>
