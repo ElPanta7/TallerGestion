@@ -941,7 +941,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                             }
                           }}>Acelerar diagnóstico</button>
                           <div style={{ fontSize: 13, color: "#E0F2FE", textAlign: "center", marginBottom: 12, lineHeight: 1.8, padding: "12px 14px", background: "rgba(6,182,212,.08)", borderRadius: 10, border: "1px solid rgba(6,182,212,.2)" }}>
-                            ¿Tienes prisa? Presiona el botón para notificar a nuestro equipo. Cada pulsación cuenta como una solicitud urgente.
+                            ¿Tienes prisa? Presiona el botón "Acelerar Diagnóstico" para notificar a nuestro equipo. Cada pulsación cuenta como una solicitud urgente.
                           </div>
                           <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600 }}>
                             Prioridad: NORMAL - Por orden de ingreso
