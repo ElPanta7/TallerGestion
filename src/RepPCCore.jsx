@@ -860,7 +860,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                   <div style={{ padding: "0 14px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
                     <button className="wa" onClick={() => {
                       const est = ESTADOS.find(e => e.key === selO.estado);
-                      sharePres("Hola " + selO.nombre + "!\n\nTu equipo fue registrado en RepPC.\n\nCodigo: " + selO.id + "\nEquipo: " + selO.marca + "\nEstado: " + est?.label + "\n\nSeguimiento en tiempo real:\n" + TALLER.clientUrl + "\n\nRepPC");
+                      sharePres("Hola " + selO.nombre + "!\n\nTu equipo fue registrado en RepPC.\n\nCodigo de seguimiento: " + selO.id + "\nEquipo: " + selO.marca + "\nEstado: " + est?.label + "\n\nSeguimiento en tiempo real (coloca el código enviado):\n" + TALLER.clientUrl + "\n\nRepPC");
                     }}>Enviar enlace al cliente</button>
                     <button className="btn b-pdf" onClick={() => handlePDF(selO)} disabled={pdfBusy}>
                       {pdfBusy ? "Generando PDF..." : "Generar PDF"}
