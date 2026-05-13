@@ -893,7 +893,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                 <div style={{ fontWeight: 700, fontSize: 19, color: "var(--wh)", marginBottom: 8 }}>Seguimiento de tu equipo</div>
                 <div style={{ color: "var(--mu)", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>Ingresa el codigo que te enviamos por WhatsApp.
                   En caso de ERROR presiona "Ver mi orden" una vez más.</div>
-                <input placeholder="Ej. AB4K" value={cliCode} onChange={e => setCliCode(e.target.value.toUpperCase())}
+                <input placeholder="Ej. AB4K5" value={cliCode} onChange={e => setCliCode(e.target.value.toUpperCase())}
                   style={{ textAlign: "center", fontSize: 22, fontFamily: "var(--mo)", letterSpacing: 3, marginBottom: 12, width: "100%", background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 10, color: "var(--wh)", padding: "12px 14px", outline: "none" }} />
                 <button className="btn b-cy" onClick={buscarOrden}>Ver mi orden</button>
               </div>
