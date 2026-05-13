@@ -389,7 +389,7 @@ export default function RepPCCore({ viewMode = "both" }) {
 
   const [form, setForm] = useState({
     nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "",
-    estado: "recibido", prioridad: "normal",
+    estado: "recibido", prioridad: "normal", prioridadPendiente: false,
     fotosRecepcion: [], fotosDurante: [], fotosListo: [],
     diagnostico: "", presupuestoMonto: "", costoRevision: "", costoFinal: "", trabajoRealizado: "",
     firmaCliente: null, firmaTecnico: null,
@@ -462,10 +462,10 @@ export default function RepPCCore({ viewMode = "both" }) {
   async function createOrder() {
     if (!form.nombre || !form.marca) return alert("Nombre y equipo son obligatorios.");
     const id = genId();
-    const o = { ...form, id, fecha: now(), updatedAt: now(), prioridad: "normal", presupuestoRespuesta: null, historial: [{ estado: "recibido", fecha: now() }], eventos: [] };
+    const o = { ...form, id, fecha: now(), updatedAt: now(), prioridad: "normal", prioridadPendiente: false, presupuestoRespuesta: null, historial: [{ estado: "recibido", fecha: now() }], eventos: [] };
     try {
       await addDoc(collection(db, "orders"), o);
-      setForm({ nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "", estado: "recibido", prioridad: "normal", fotosRecepcion: [], fotosDurante: [], fotosListo: [], diagnostico: "", presupuestoMonto: "", costoRevision: "", costoFinal: "", trabajoRealizado: "", firmaCliente: null, firmaTecnico: null });
+      setForm({ nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "", estado: "recibido", prioridad: "normal", prioridadPendiente: false, fotosRecepcion: [], fotosDurante: [], fotosListo: [], diagnostico: "", presupuestoMonto: "", costoRevision: "", costoFinal: "", trabajoRealizado: "", firmaCliente: null, firmaTecnico: null });
       setAdminTab("list");
     } catch (e) { console.error("Error creando:", e); alert("Error al crear la orden."); }
   }
@@ -578,7 +578,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                             <div key={o.id} className="card" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
                               <div style={{ display: "flex", justifyContent: "space-between" }}>
                                 <span className="cid">{o.id}</span>
-                                <div>{o.prioridad === "exclusiva" && <span className="bdg b-go">⭐ EXCLUSIVA</span>}</div>
+                                <div>
+                                  {o.prioridad === "premium" && <span className="bdg b-go">💎 PREMIUM</span>}
+                                  {o.prioridadPendiente && <span className="bdg b-yw">⏳ PENDIENTE</span>}
+                                </div>
                               </div>
                               <div className="cnm">{o.nombre}</div>
                               <div className="cdv">{o.marca}</div>
@@ -723,6 +726,25 @@ export default function RepPCCore({ viewMode = "both" }) {
                   </div>
 
                   {/* ESTADO */}
+                  {/* PRIORIDAD - CONTROL ADMIN */}
+                  <div className="sec">Prioridad de reparación</div>
+                  <div style={{ padding: "0 14px 12px" }}>
+                    {selO.prioridad === "normal" ? (
+                      <button className="btn b-go" onClick={() => { updO(selO.id, { prioridad: "premium" }); addEv(selO.id, "💎", "Admin cambio prioridad a Premium"); }}>
+                        Cambiar a Premium - {fmt(PRECIO_EXCLUS)}
+                      </button>
+                    ) : (
+                      <>
+                        <div className="bn-go" style={{ marginBottom: 8 }}>💎 Prioridad Premium Activa</div>
+                        <button className="btn b-re" onClick={() => { updO(selO.id, { prioridad: "normal" }); addEv(selO.id, "↩️", "Admin cambio prioridad a Normal"); }}>Cambiar a Normal</button>
+                      </>
+                    )}
+                    {selO.prioridadPendiente && (
+                      <div className="bn-yw" style={{ marginTop: 8 }}>⏳ Cliente solicito Premium - Pendiente confirmación</div>
+                    )}
+                  </div>
+
+                  {/* ESTADO ACTUAL */}
                   <div className="sec">Estado actual</div>
                   <div style={{ padding: "0 14px 12px" }}>
                     <div className="sgrid">
@@ -888,44 +910,38 @@ export default function RepPCCore({ viewMode = "both" }) {
                       {o.prioridad === "exclusiva" && <span className="bdg b-go">EXCLUSIVA</span>}
                     </div>
                     <div className="h-ac">
-                      {canAccel && (
+                      {(o.estado === "recibido" || o.estado === "diagnostico") && o.prioridad === "normal" && !o.prioridadPendiente && (
                         <div>
                           <button className="btn accel-btn" style={{ background: "linear-gradient(135deg, #0369A1, #06B6D4)", marginBottom: 8, position: "relative" }} onClick={() => {
-                            setAccelClicks(c => c + 1);
-                            if (accelClicks + 1 >= 5) {
-                              setModal("exclusiva5");
-                              setAccelClicks(0);
-                            }
-                            addEv(o.id, "🚀", "Cliente presiono acelerar (" + (accelClicks + 1) + "x)");
+                            addEv(o.id, "🚀", "Cliente presiono acelerar diagnóstico");
                             for (let i = 0; i < 3; i++) {
                               setTimeout(() => {
                                 const r = document.createElement("div");
                                 r.textContent = "🚀";
-                                r.style.position = "absolute";
-                                r.style.left = Math.random() * 100 + "%";
+                                r.style.position = "fixed";
+                                r.style.left = Math.random() * window.innerWidth + "px";
                                 r.style.top = "100%";
-                                r.style.fontSize = "24px";
-                                r.style.animation = "rocket 1s ease-out forwards";
+                                r.style.fontSize = "32px";
+                                r.style.animation = "rocket 1.5s ease-out forwards";
                                 r.style.pointerEvents = "none";
                                 r.style.zIndex = "100";
                                 document.body.appendChild(r);
-                                setTimeout(() => r.remove(), 1000);
+                                setTimeout(() => r.remove(), 1500);
                               }, i * 150);
                             }
-                          }}>Acelerar diagnostico</button>
+                          }}>Acelerar diagnóstico</button>
                           <div style={{ fontSize: 11, color: "var(--mu)", textAlign: "center", marginBottom: 8, lineHeight: 1.5, padding: "0 14px" }}>¿Tienes prisa? Haznoslo saber presionando acelerar diagnóstico. Cada pulsación es una notificación para nuestro equipo de trabajo.</div>
-                          <div style={{ background: o.prioridad === "exclusiva" ? "rgba(245,158,11,.1)" : "rgba(110,231,183,.1)", border: "1px solid " + (o.prioridad === "exclusiva" ? "rgba(245,158,11,.3)" : "rgba(110,231,183,.3)"), borderRadius: 10, padding: "10px 14px", fontSize: 12, color: o.prioridad === "exclusiva" ? "var(--go)" : "#6EE7B7", textAlign: "center", fontWeight: 600 }}>
-                            Prioridad: {o.prioridad === "exclusiva" ? "EXCLUSIVA ⭐" : "NORMAL - Por orden de ingreso"}
+                          <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600, marginBottom: 8 }}>
+                            Prioridad: NORMAL - Por orden de ingreso
                           </div>
+                          <button className="btn b-yw" onClick={() => setModal("premiumModal")}>¿Deseas cambiar la prioridad de reparación?</button>
                         </div>
                       )}
-                      {!canAccel && o.prioridad === "normal" && (
-                        <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600 }}>
-                          Prioridad: NORMAL - Por orden de ingreso
-                        </div>
+                      {o.prioridad === "premium" && (
+                        <div className="bn-go">💎 Tu equipo tiene Prioridad Premium - Saltás la cola de espera</div>
                       )}
-                      {o.prioridad === "exclusiva" && (
-                        <div className="bn-go">Tu equipo tiene Prioridad Exclusiva ⭐</div>
+                      {o.prioridadPendiente && (
+                        <div className="bn-yw">⏳ Tu solicitud de Prioridad Premium está pendiente de confirmación</div>
                       )}
                     </div>
                   </div>
@@ -1020,21 +1036,21 @@ export default function RepPCCore({ viewMode = "both" }) {
         )}
 
         {/* MODALES */}
-        {modal === "exclusiva5" && cliO && (
+        {modal === "premiumModal" && cliO && (
           <div className="overlay" onClick={() => setModal(null)}>
-            <div className="modal m-go" onClick={e => e.stopPropagation()}>
-              <h2 style={{ color: "var(--go)" }}>Prioridad Exclusiva</h2>
-              <div className="msub">¿Necesitas tu equipo listo cuánto antes? Cambia la prioridad de reparación a Exclusiva.</div>
-              <div className="warn-go"><p>Es un <strong>monto adicional de {fmt(PRECIO_EXCLUS)}</strong> que <strong>no es reembolsable</strong>.</p></div>
+            <div className="modal m-yw" onClick={e => e.stopPropagation()}>
+              <h2 style={{ color: "#FCD34D" }}>Prioridad Premium</h2>
+              <div className="msub">{fmt(PRECIO_EXCLUS)} - Saltás la cola de espera</div>
+              <div className="warn-yw"><p>Es un <strong>monto adicional</strong> que <strong>no es reembolsable</strong>.</p></div>
               <div className="bbox">
-                <div className="bamt" style={{ color: "var(--go)" }}>{fmt(PRECIO_EXCLUS)}</div>
+                <div className="bamt" style={{ color: "#FCD34D" }}>{fmt(PRECIO_EXCLUS)}</div>
                 <div className="bnote bn-g">Monto adicional - no se descuenta.</div>
                 {bRows.map(([k, v]) => <div key={k} className="brow"><span className="bk">{k}</span><span className="bv">{v}</span></div>)}
                 <div className="walert">Verificar titular: <strong>{TALLER.titular} - DNI {TALLER.dni}</strong></div>
               </div>
               <div className="row2">
                 <button className="btn b-gh" style={{ flex: 1 }} onClick={() => setModal(null)}>No, espero</button>
-                <button className="wa" onClick={() => { updO(cliO.id, { prioridad: "exclusiva" }); addEv(cliO.id, "⭐", "Cliente contrato Prioridad Exclusiva"); setModal(null); waSend("Hola! Quiero Prioridad Exclusiva para mi orden " + cliO.id + ". Monto: " + fmt(PRECIO_EXCLUS) + " (no reembolsable). Te envio el comprobante."); }}>Enviar comprobante</button>
+                <button className="wa" onClick={() => { updO(cliO.id, { prioridadPendiente: true }); addEv(cliO.id, "⏳", "Cliente solicito Prioridad Premium"); setModal(null); waSend("Hola! Quiero Prioridad Premium para mi orden " + cliO.id + ". Monto: " + fmt(PRECIO_EXCLUS) + " (no reembolsable). Te envio el comprobante."); }}>Enviar comprobante</button>
               </div>
             </div>
           </div>
