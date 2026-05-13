@@ -91,10 +91,18 @@ const ESTADOS = [
   { key: "cancelado", label: "Cancelado", icon: "❌", color: "#EF4444" },
 ];
 
-function genId() {
+async function genId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let c = "";
-  for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  let existe = true;
+  
+  while (existe) {
+    c = "";
+    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    const existente = orders.find(o => o.id === c);
+    existe = existente ? true : false;
+  }
+  
   return c;
 }
 
