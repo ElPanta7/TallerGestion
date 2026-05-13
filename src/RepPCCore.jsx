@@ -98,7 +98,7 @@ async function genId() {
   
   while (existe) {
     c = "";
-    for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
     const existente = orders.find(o => o.id === c);
     existe = existente ? true : false;
   }
