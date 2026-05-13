@@ -283,7 +283,7 @@ input[type=file]{display:none;}
 .btn-sm{padding:8px 14px;font-size:13px;width:auto;border-radius:8px;}
 @keyframes cp{0%,100%{box-shadow:0 0 10px rgba(6,182,212,.3);}50%{box-shadow:0 0 22px rgba(6,182,212,.7);}}
 @keyframes gp{0%,100%{box-shadow:0 0 10px rgba(245,158,11,.25);}50%{box-shadow:0 0 22px rgba(245,158,11,.6);}}
-@keyframes rocket{0%{transform:translateY(-100vh) translateX(0);}100%{transform:translateY(100vh) translateX(0);}}
+@keyframes rocket{0%{transform:translateY(100vh) translateX(0);}100%{transform:translateY(-100vh) translateX(0);}}
 @keyframes neonBorder{0%,100%{box-shadow:inset 0 0 10px rgba(6,182,212,.3), 0 0 5px rgba(6,182,212,.5);}50%{box-shadow:inset 0 0 15px rgba(6,182,212,.6), 0 0 10px rgba(6,182,212,.8);}}
 .gl-cy{animation:cp 2s infinite;}
 .gl-go{animation:gp 2s infinite;}
@@ -929,7 +929,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                                 r.textContent = "🚀";
                                 r.style.position = "fixed";
                                 r.style.left = Math.random() * window.innerWidth + "px";
-                                r.style.top = "-50px";
+                                r.style.bottom = "-50px";
                                 r.style.fontSize = "48px";
                                 r.style.animation = "rocket 3s linear forwards";
                                 r.style.pointerEvents = "none";
