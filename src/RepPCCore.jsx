@@ -470,7 +470,7 @@ export default function RepPCCore({ viewMode = "both" }) {
 
   async function createOrder() {
     if (!form.nombre || !form.marca) return alert("Nombre y equipo son obligatorios.");
-    const id = genId();
+    const id = await genId();
     const o = { ...form, id, fecha: now(), updatedAt: now(), prioridad: "normal", prioridadPendiente: false, presupuestoRespuesta: null, historial: [{ estado: "recibido", fecha: now() }], eventos: [] };
     try {
       await addDoc(collection(db, "orders"), o);
