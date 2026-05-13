@@ -91,18 +91,10 @@ const ESTADOS = [
   { key: "cancelado", label: "Cancelado", icon: "❌", color: "#EF4444" },
 ];
 
-async function genId() {
+function genId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let c = "";
-  let existe = true;
-  
-  while (existe) {
-    c = "";
-    for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
-    const existente = orders.find(o => o.id === c);
-    existe = existente ? true : false;
-  }
-  
+  for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
   return c;
 }
 
@@ -470,7 +462,7 @@ export default function RepPCCore({ viewMode = "both" }) {
 
   async function createOrder() {
     if (!form.nombre || !form.marca) return alert("Nombre y equipo son obligatorios.");
-    const id = await genId();
+    const id = genId();
     const o = { ...form, id, fecha: now(), updatedAt: now(), prioridad: "normal", prioridadPendiente: false, presupuestoRespuesta: null, historial: [{ estado: "recibido", fecha: now() }], eventos: [] };
     try {
       await addDoc(collection(db, "orders"), o);
