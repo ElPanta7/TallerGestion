@@ -731,7 +731,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                   <div className="sec">Prioridad de reparación</div>
                   <div style={{ padding: "0 14px 12px" }}>
                     {selO.prioridad === "normal" ? (
-                      <button className="btn b-go" onClick={() => { updO(selO.id, { prioridad: "premium" }); addEv(selO.id, "💎", "Admin cambio prioridad a Premium"); }}>
+                      <button className="btn b-go" onClick={() => { updO(selO.id, { prioridad: "premium", prioridadPendiente: false }); addEv(selO.id, "💎", "Admin cambio prioridad a Premium"); }}>
                         Cambiar a Premium - {fmt(PRECIO_EXCLUS)}
                       </button>
                     ) : (
