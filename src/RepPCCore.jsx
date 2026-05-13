@@ -283,8 +283,8 @@ input[type=file]{display:none;}
 .btn-sm{padding:8px 14px;font-size:13px;width:auto;border-radius:8px;}
 @keyframes cp{0%,100%{box-shadow:0 0 10px rgba(6,182,212,.3);}50%{box-shadow:0 0 22px rgba(6,182,212,.7);}}
 @keyframes gp{0%,100%{box-shadow:0 0 10px rgba(245,158,11,.25);}50%{box-shadow:0 0 22px rgba(245,158,11,.6);}}
-@keyframes rocket{0%{transform:translateY(0) scale(1);}50%{transform:translateY(-20px) scale(1.1);}100%{transform:translateY(0) scale(1);}}
-@keyframes neonPulse{0%,100%{box-shadow:0 0 10px #06B6D4, 0 0 20px #06B6D4;}50%{box-shadow:0 0 20px #06B6D4, 0 0 40px #06B6D4, 0 0 60px #06B6D4;}}
+@keyframes rocket{0%{transform:translateY(-100vh) translateX(0);}100%{transform:translateY(100vh) translateX(0);}}
+@keyframes neonBorder{0%,100%{box-shadow:inset 0 0 10px rgba(6,182,212,.3), 0 0 5px rgba(6,182,212,.5);}50%{box-shadow:inset 0 0 15px rgba(6,182,212,.6), 0 0 10px rgba(6,182,212,.8);}}
 .gl-cy{animation:cp 2s infinite;}
 .gl-go{animation:gp 2s infinite;}
 .wa{display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:white;border:none;border-radius:12px;padding:13px;font-family:var(--fn);font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;}
@@ -913,7 +913,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                     <div className="h-ac">
                       {(o.estado === "recibido" || o.estado === "diagnostico") && o.prioridad === "normal" && !o.prioridadPendiente && (
                         <div>
-                          <button className="btn accel-btn" style={{ background: "linear-gradient(135deg, #0369A1, #06B6D4)", marginBottom: 8, position: "relative", animation: accelClicks >= 1 ? "neonPulse 0.8s ease-in-out infinite" : "none" }} onClick={() => {
+                          <button className="btn accel-btn" style={{ background: "linear-gradient(135deg, #0369A1, #06B6D4)", marginBottom: 12, position: "relative", animation: accelClicks >= 1 ? "neonBorder 2s ease-in-out infinite" : "none" }} onClick={() => {
                             const newClicks = accelClicks + 1;
                             setAccelClicks(newClicks);
                             
@@ -923,27 +923,29 @@ export default function RepPCCore({ viewMode = "both" }) {
                             
                             addEv(o.id, "🚀", "Cliente presiono acelerar (" + newClicks + "x)");
                             
-                            for (let i = 0; i < 5; i++) {
+                            for (let i = 0; i < 8; i++) {
                               setTimeout(() => {
                                 const r = document.createElement("div");
                                 r.textContent = "🚀";
                                 r.style.position = "fixed";
                                 r.style.left = Math.random() * window.innerWidth + "px";
-                                r.style.top = window.innerHeight + "px";
-                                r.style.fontSize = "40px";
-                                r.style.animation = "rocket 2s ease-out forwards";
+                                r.style.top = "-50px";
+                                r.style.fontSize = "48px";
+                                r.style.animation = "rocket 3s linear forwards";
                                 r.style.pointerEvents = "none";
                                 r.style.zIndex = "9999";
                                 document.body.appendChild(r);
-                                setTimeout(() => r.remove(), 2000);
-                              }, i * 100);
+                                setTimeout(() => r.remove(), 3000);
+                              }, i * 80);
                             }
                           }}>Acelerar diagnóstico</button>
-                          <div style={{ fontSize: 11, color: "var(--mu)", textAlign: "center", marginBottom: 8, lineHeight: 1.5, padding: "0 14px" }}>¿Tienes prisa? Haznoslo saber presionando acelerar diagnóstico. Cada pulsación es una notificación para nuestro equipo de trabajo.</div>
-                          <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600, marginBottom: 8 }}>
-                            Prioridad: NORMAL - Por orden de ingreso {accelClicks > 0 && `(${accelClicks}/5)`}
+                          <div style={{ fontSize: 13, color: "#E0F2FE", textAlign: "center", marginBottom: 12, lineHeight: 1.8, padding: "12px 14px", background: "rgba(6,182,212,.08)", borderRadius: 10, border: "1px solid rgba(6,182,212,.2)" }}>
+                            ¿Tienes prisa? Presiona el botón para notificar a nuestro equipo. Cada pulsación cuenta como una solicitud urgente.
                           </div>
-                          <button className="btn b-yw" onClick={() => setModal("premiumModal")}>¿Deseas cambiar la prioridad de reparación?</button>
+                          <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600 }}>
+                            Prioridad: NORMAL - Por orden de ingreso
+                          </div>
+                          <button className="btn b-yw" style={{ marginTop: 8 }} onClick={() => setModal("premiumModal")}>¿Deseas cambiar la prioridad de reparación?</button>
                         </div>
                       )}
                       {o.prioridad === "premium" && (
