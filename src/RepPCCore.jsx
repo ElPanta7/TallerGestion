@@ -95,9 +95,9 @@ function genId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let c = "";
   for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
-  return c;
+  return "RP-" + c;
 }
-  
+
 function now() {
   return new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
@@ -283,7 +283,7 @@ input[type=file]{display:none;}
 .btn-sm{padding:8px 14px;font-size:13px;width:auto;border-radius:8px;}
 @keyframes cp{0%,100%{box-shadow:0 0 10px rgba(6,182,212,.3);}50%{box-shadow:0 0 22px rgba(6,182,212,.7);}}
 @keyframes gp{0%,100%{box-shadow:0 0 10px rgba(245,158,11,.25);}50%{box-shadow:0 0 22px rgba(245,158,11,.6);}}
-@keyframes rocket{0%{transform:translateY(100vh) translateX(0);}100%{transform:translateY(-100vh) translateX(0);}}
+@keyframes rocket{0%{transform:translateY(-100vh) translateX(0);}100%{transform:translateY(100vh) translateX(0);}}
 @keyframes neonBorder{0%,100%{box-shadow:inset 0 0 10px rgba(6,182,212,.3), 0 0 5px rgba(6,182,212,.5);}50%{box-shadow:inset 0 0 15px rgba(6,182,212,.6), 0 0 10px rgba(6,182,212,.8);}}
 .gl-cy{animation:cp 2s infinite;}
 .gl-go{animation:gp 2s infinite;}
@@ -860,7 +860,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                   <div style={{ padding: "0 14px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
                     <button className="wa" onClick={() => {
                       const est = ESTADOS.find(e => e.key === selO.estado);
-                      sharePres("Hola " + selO.nombre + "!\n\nTu equipo fue registrado en RepPC.\n\nCodigo de seguimiento: " + selO.id + "\nEquipo: " + selO.marca + "\nEstado: " + est?.label + "\n\nSeguimiento en tiempo real (coloca el código enviado):\n" + TALLER.clientUrl + "\n\nRepPC");
+                      sharePres("Hola " + selO.nombre + "!\n\nTu equipo fue registrado en RepPC.\n\nCodigo: " + selO.id + "\nEquipo: " + selO.marca + "\nEstado: " + est?.label + "\n\nSeguimiento en tiempo real:\n" + TALLER.clientUrl + "\n\nRepPC");
                     }}>Enviar enlace al cliente</button>
                     <button className="btn b-pdf" onClick={() => handlePDF(selO)} disabled={pdfBusy}>
                       {pdfBusy ? "Generando PDF..." : "Generar PDF"}
@@ -889,7 +889,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                 <div className="h-sb">Reparacion de PC</div>
                 <div style={{ fontWeight: 700, fontSize: 19, color: "var(--wh)", marginBottom: 8 }}>Seguimiento de tu equipo</div>
                 <div style={{ color: "var(--mu)", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>Ingresa el codigo que te enviamos por WhatsApp</div>
-                <input placeholder="Ej. AB4K" value={cliCode} onChange={e => setCliCode(e.target.value.toUpperCase())}
+                <input placeholder="Ej. RP-AB4K" value={cliCode} onChange={e => setCliCode(e.target.value.toUpperCase())}
                   style={{ textAlign: "center", fontSize: 22, fontFamily: "var(--mo)", letterSpacing: 3, marginBottom: 12, width: "100%", background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 10, color: "var(--wh)", padding: "12px 14px", outline: "none" }} />
                 <button className="btn b-cy" onClick={buscarOrden}>Ver mi orden</button>
               </div>
@@ -929,7 +929,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                                 r.textContent = "🚀";
                                 r.style.position = "fixed";
                                 r.style.left = Math.random() * window.innerWidth + "px";
-                                r.style.bottom = "-50px";
+                                r.style.top = "-50px";
                                 r.style.fontSize = "48px";
                                 r.style.animation = "rocket 3s linear forwards";
                                 r.style.pointerEvents = "none";
@@ -938,9 +938,9 @@ export default function RepPCCore({ viewMode = "both" }) {
                                 setTimeout(() => r.remove(), 3000);
                               }, i * 80);
                             }
-                          }}>Acelerar Diagnóstico</button>
+                          }}>Acelerar diagnóstico</button>
                           <div style={{ fontSize: 13, color: "#E0F2FE", textAlign: "center", marginBottom: 12, lineHeight: 1.8, padding: "12px 14px", background: "rgba(6,182,212,.08)", borderRadius: 10, border: "1px solid rgba(6,182,212,.2)" }}>
-                            ¿Tienes prisa? Presiona el botón "Acelerar Diagnóstico" para notificarle a nuestro equipo de trabajo tu urgencia. Cada pulsación cuenta como una solicitud urgente.
+                            ¿Tienes prisa? Presiona el botón para notificar a nuestro equipo. Cada pulsación cuenta como una solicitud urgente.
                           </div>
                           <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600 }}>
                             Prioridad: NORMAL - Por orden de ingreso
@@ -1006,11 +1006,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                           <div style={{ marginTop: 14 }}>
                             <div style={{ fontSize: 13, color: "var(--mu)", marginBottom: 10, lineHeight: 1.5 }}>Para continuar, confirma si aceptas:</div>
                             <div className="row2">
-                              <button className="btn b-re" style={{ flex: 1 }} onClick={() => {
-                                updO(o.id, { presupuestoRespuesta: "rechazado", estado: "cancelado" });
-                                addEv(o.id, "❌", "Cliente rechazo el presupuesto");
-                                setModal("rechazadoPresup");
-                              }}>No acepto</button>
+                              <button className="btn b-re" style={{ flex: 1 }} onClick={() => setModal("rechazadoPresup")}>No acepto</button>
                               <button className="btn b-cy" style={{ flex: 1 }} onClick={() => setModal("aceptarPres")}>Acepto</button>
                             </div>
                           </div>
@@ -1097,7 +1093,7 @@ export default function RepPCCore({ viewMode = "both" }) {
               </div>
               <div className="row2">
                 <button className="btn b-gh" style={{ flex: 1 }} onClick={() => setModal(null)}>No, volver</button>
-                <button className="btn b-re" style={{ flex: 1 }} onClick={() => { setModal(null); waSend("Hola! Confirmo que RECHAZO el presupuesto de " + cliO.presupuestoMonto + " para mi orden " + cliO.id + ". Necesito retirar mi equipo. Abonaré el costo de revisión/diagnóstico: " + (cliO.costoRevision || "$0") + ". Gracias!"); }}>Si, confirmar rechazo</button>
+                <button className="btn b-re" style={{ flex: 1 }} onClick={() => { updO(cliO.id, { presupuestoRespuesta: "rechazado", estado: "cancelado" }); addEv(cliO.id, "❌", "Cliente rechazo el presupuesto"); setModal(null); waSend("Hola! Confirmo que RECHAZO el presupuesto de " + cliO.presupuestoMonto + " para mi orden " + cliO.id + ". Necesito retirar mi equipo. Abonaré el costo de revisión/diagnóstico: " + (cliO.costoRevision || "$0") + ". Gracias!"); }}>Si, confirmar rechazo</button>
               </div>
             </div>
           </div>
