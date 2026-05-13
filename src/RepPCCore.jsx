@@ -284,6 +284,7 @@ input[type=file]{display:none;}
 @keyframes cp{0%,100%{box-shadow:0 0 10px rgba(6,182,212,.3);}50%{box-shadow:0 0 22px rgba(6,182,212,.7);}}
 @keyframes gp{0%,100%{box-shadow:0 0 10px rgba(245,158,11,.25);}50%{box-shadow:0 0 22px rgba(245,158,11,.6);}}
 @keyframes rocket{0%{transform:translateY(0) scale(1);}50%{transform:translateY(-20px) scale(1.1);}100%{transform:translateY(0) scale(1);}}
+@keyframes neonPulse{0%,100%{box-shadow:0 0 10px #06B6D4, 0 0 20px #06B6D4;}50%{box-shadow:0 0 20px #06B6D4, 0 0 40px #06B6D4, 0 0 60px #06B6D4;}}
 .gl-cy{animation:cp 2s infinite;}
 .gl-go{animation:gp 2s infinite;}
 .wa{display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:white;border:none;border-radius:12px;padding:13px;font-family:var(--fn);font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;}
@@ -912,27 +913,35 @@ export default function RepPCCore({ viewMode = "both" }) {
                     <div className="h-ac">
                       {(o.estado === "recibido" || o.estado === "diagnostico") && o.prioridad === "normal" && !o.prioridadPendiente && (
                         <div>
-                          <button className="btn accel-btn" style={{ background: "linear-gradient(135deg, #0369A1, #06B6D4)", marginBottom: 8, position: "relative" }} onClick={() => {
-                            addEv(o.id, "🚀", "Cliente presiono acelerar diagnóstico");
-                            for (let i = 0; i < 3; i++) {
+                          <button className="btn accel-btn" style={{ background: "linear-gradient(135deg, #0369A1, #06B6D4)", marginBottom: 8, position: "relative", animation: accelClicks >= 1 ? "neonPulse 0.8s ease-in-out infinite" : "none" }} onClick={() => {
+                            const newClicks = accelClicks + 1;
+                            setAccelClicks(newClicks);
+                            
+                            if (newClicks >= 6) {
+                              setModal("premiumModal");
+                            }
+                            
+                            addEv(o.id, "🚀", "Cliente presiono acelerar (" + newClicks + "x)");
+                            
+                            for (let i = 0; i < 5; i++) {
                               setTimeout(() => {
                                 const r = document.createElement("div");
                                 r.textContent = "🚀";
                                 r.style.position = "fixed";
                                 r.style.left = Math.random() * window.innerWidth + "px";
-                                r.style.top = "100%";
-                                r.style.fontSize = "32px";
-                                r.style.animation = "rocket 1.5s ease-out forwards";
+                                r.style.top = window.innerHeight + "px";
+                                r.style.fontSize = "40px";
+                                r.style.animation = "rocket 2s ease-out forwards";
                                 r.style.pointerEvents = "none";
-                                r.style.zIndex = "100";
+                                r.style.zIndex = "9999";
                                 document.body.appendChild(r);
-                                setTimeout(() => r.remove(), 1500);
-                              }, i * 150);
+                                setTimeout(() => r.remove(), 2000);
+                              }, i * 100);
                             }
                           }}>Acelerar diagnóstico</button>
                           <div style={{ fontSize: 11, color: "var(--mu)", textAlign: "center", marginBottom: 8, lineHeight: 1.5, padding: "0 14px" }}>¿Tienes prisa? Haznoslo saber presionando acelerar diagnóstico. Cada pulsación es una notificación para nuestro equipo de trabajo.</div>
                           <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600, marginBottom: 8 }}>
-                            Prioridad: NORMAL - Por orden de ingreso
+                            Prioridad: NORMAL - Por orden de ingreso {accelClicks > 0 && `(${accelClicks}/5)`}
                           </div>
                           <button className="btn b-yw" onClick={() => setModal("premiumModal")}>¿Deseas cambiar la prioridad de reparación?</button>
                         </div>
