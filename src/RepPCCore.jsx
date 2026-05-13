@@ -722,6 +722,24 @@ export default function RepPCCore({ viewMode = "both" }) {
                     {selO.firmaTecnico && <div className="irow"><span className="ik">Firma tecnico</span><span className="iv"><img src={selO.firmaTecnico} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
                   </div>
 
+                  {/* PRIORIDAD */}
+                  <div className="sec">Prioridad de reparación</div>
+                  <div style={{ padding: "0 14px 12px" }}>
+                    {selO.prioridad === "normal" ? (
+                      <button className="btn b-go" onClick={() => { updO(selO.id, { prioridad: "premium" }); addEv(selO.id, "💎", "Prioridad cambiada a Premium"); }}>
+                        Cambiar a Premium - {fmt(PRECIO_PREMIUM)}
+                      </button>
+                    ) : (
+                      <>
+                        <div className="bn-go" style={{ marginBottom: 8 }}>💎 Prioridad Premium Activa</div>
+                        <button className="btn b-re" onClick={() => { updO(selO.id, { prioridad: "normal" }); addEv(selO.id, "↩️", "Prioridad cambiada a Normal"); }}>Cambiar a Normal</button>
+                      </>
+                    )}
+                    {selO.prioridadPendiente && (
+                      <div className="bn-yw" style={{ marginTop: 8 }}>⏳ Cliente solicito Premium - Pendiente confirmación</div>
+                    )}
+                  </div>
+
                   {/* ESTADO */}
                   <div className="sec">Estado actual</div>
                   <div style={{ padding: "0 14px 12px" }}>
