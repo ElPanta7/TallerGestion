@@ -738,10 +738,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                       <label>Fotos en recepcion</label>
                       <div className="cam-picker">
                         <label style={{ flex: 1 }} className="pa" htmlFor="fR-cam">
-                          📷<input id="fR-cam" type="file" accept="image/*" capture="environment" onChange={e => fotoF("fotosRecepcion", e.target.files)} />
+                          📷<input id="fR-cam" type="file" accept="image/*" capture="environment" onChange={e => fotoF("fotosRecepcion", e.target.files).catch(err => console.error("Error:", err))} />
                         </label>
                         <label style={{ flex: 1 }} className="pa" htmlFor="fR-gal">
-                          🖼️<input id="fR-gal" type="file" accept="image/*" multiple onChange={e => fotoF("fotosRecepcion", e.target.files)} />
+                          🖼️<input id="fR-gal" type="file" accept="image/*" multiple onChange={e => fotoF("fotosRecepcion", e.target.files).catch(err => console.error("Error:", err))} />
                         </label>
                       </div>
                       <div className="pr">
@@ -910,10 +910,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                       <div className="plbl">{lbl}</div>
                       <div className="cam-picker">
                         <label style={{ flex: 1 }} className="pa" htmlFor={"ph-" + key + "-cam"}>
-                          📷<input id={"ph-" + key + "-cam"} type="file" accept="image/*" capture="environment" onChange={e => fotoO(selO.id, key, e.target.files)} />
+                          📷<input id={"ph-" + key + "-cam"} type="file" accept="image/*" capture="environment" onChange={e => fotoO(selO.id, key, e.target.files).catch(err => console.error("Error:", err))} />
                         </label>
                         <label style={{ flex: 1 }} className="pa" htmlFor={"ph-" + key + "-gal"}>
-                          🖼️<input id={"ph-" + key + "-gal"} type="file" accept="image/*" multiple onChange={e => fotoO(selO.id, key, e.target.files)} />
+                          🖼️<input id={"ph-" + key + "-gal"} type="file" accept="image/*" multiple onChange={e => fotoO(selO.id, key, e.target.files).catch(err => console.error("Error:", err))} />
                         </label>
                       </div>
                       <div className="pr">
