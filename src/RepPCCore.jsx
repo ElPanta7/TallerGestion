@@ -105,7 +105,20 @@ function now() {
 
 function estadoLabel(key) { return ESTADOS.find(e => e.key === key)?.label || key; }
 
-async function generarPDF(order) {
+async function urlToBase64(url) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("Error converting URL to base64:", e);
+    return null;
+  }
+}
   const { jsPDF } = window.jspdf;
   const d = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = 210, M = 18; let y = 0;
@@ -225,7 +238,10 @@ async function generarPDF(order) {
             chk(50);
           }
           
-          d.addImage(imgs[i], "JPEG", xPos, y, imgWidth, imgHeight);
+          const base64Image = await urlToBase64(imgs[i]);
+          if (base64Image) {
+            d.addImage(base64Image, "JPEG", xPos, y, imgWidth, imgHeight);
+          }
           xPos += imgWidth + 5;
           maxHeight = Math.max(maxHeight, imgHeight);
         } catch (e) {
