@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const TALLER = {
   nombre: "RepPC",
@@ -105,17 +104,9 @@ function now() {
 
 function estadoLabel(key) { return ESTADOS.find(e => e.key === key)?.label || key; }
 
-async function urlToBase64(url) {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-  } catch (e) {
-    console.error("Error converting URL to base64:", e);
+async function generarPDF(order) {
+  if (!window.jspdf) {
+    alert("PDF library not loaded");
     return null;
   }
 }
@@ -238,10 +229,7 @@ async function urlToBase64(url) {
             chk(50);
           }
           
-          const base64Image = await urlToBase64(imgs[i]);
-          if (base64Image) {
-            d.addImage(base64Image, "JPEG", xPos, y, imgWidth, imgHeight);
-          }
+          d.addImage(imgs[i], "JPEG", xPos, y, imgWidth, imgHeight);
           xPos += imgWidth + 5;
           maxHeight = Math.max(maxHeight, imgHeight);
         } catch (e) {
@@ -508,60 +496,50 @@ export default function RepPCCore({ viewMode = "both" }) {
 
 
   async function fotoF(key, files) {
+    if (!files || files.length === 0) return;
     const fileArray = Array.from(files);
-    const urls = [];
+    const base64Array = [];
     
     for (let i = 0; i < fileArray.length; i++) {
       try {
         const file = fileArray[i];
-        const timestamp = Date.now();
-        const filename = `${key}_${timestamp}_${i}.jpg`;
-        const storageRef = ref(storage, `temp/${filename}`);
-        
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-        urls.push(downloadURL);
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+        base64Array.push(base64);
       } catch (e) {
-        console.error("Error uploading foto:", e);
+        console.error("Error converting photo:", e);
       }
     }
     
-    setForm(f => ({ ...f, [key]: [...f[key], ...urls] }));
+    setForm(f => ({ ...f, [key]: [...f[key], ...base64Array] }));
   }
 
   async function fotoO(id, key, files) {
     if (!files || files.length === 0) return;
     
     const fileArray = Array.from(files);
-    const urls = [];
-    
-    console.log(`Subiendo ${fileArray.length} foto(s) para ${key}...`);
+    const base64Array = [];
     
     for (let i = 0; i < fileArray.length; i++) {
       try {
         const file = fileArray[i];
-        const timestamp = Date.now();
-        const filename = `${id}_${key}_${timestamp}_${i}.jpg`;
-        const storageRef = ref(storage, `orders/${id}/${filename}`);
-        
-        console.log(`Subiendo: ${filename}`);
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-        urls.push(downloadURL);
-        console.log(`✅ Subida exitosa: ${filename}`);
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+        base64Array.push(base64);
       } catch (e) {
-        console.error("Error uploading foto:", e);
-        alert(`Error al subir foto: ${e.message}`);
+        console.error("Error converting photo:", e);
       }
     }
     
-    console.log(`Guardando ${urls.length} URLs en orden...`);
     const o = getO(id);
     if (o) {
-      updO(id, { [key]: [...(o[key] || []), ...urls] });
-      console.log(`✅ Orden actualizada con fotos`);
-    } else {
-      console.error("Orden no encontrada:", id);
+      updO(id, { [key]: [...(o[key] || []), ...base64Array] });
     }
   }
 
