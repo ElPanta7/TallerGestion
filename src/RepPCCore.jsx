@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { db } from './firebase';
+import { db, storage } from './firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const TALLER = {
   nombre: "RepPC",
@@ -11,7 +12,6 @@ const TALLER = {
   clientUrl: "https://taller-gestion-bay.vercel.app/cliente",
 };
 
-const PRECIO_ACCEL = 25000;
 const PRECIO_EXCLUS = 50000;
 const fmt = n => "$" + n.toLocaleString("es-AR") + " ARS";
 
@@ -89,13 +89,14 @@ const ESTADOS = [
   { key: "reparacion", label: "En Reparacion", icon: "🔧", color: "#0EA5E9" },
   { key: "listo", label: "Listo para Retirar", icon: "✅", color: "#22D3EE" },
   { key: "entregado", label: "Entregado", icon: "🎉", color: "#67E8F9" },
+  { key: "cancelado", label: "Cancelado", icon: "❌", color: "#EF4444" },
 ];
 
 function genId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let c = "";
-  for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
-  return "RP-" + c;
+  for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
 }
 
 function now() {
@@ -104,7 +105,20 @@ function now() {
 
 function estadoLabel(key) { return ESTADOS.find(e => e.key === key)?.label || key; }
 
-async function generarPDF(order) {
+async function urlToBase64(url) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("Error converting URL to base64:", e);
+    return null;
+  }
+}
   const { jsPDF } = window.jspdf;
   const d = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = 210, M = 18; let y = 0;
@@ -196,6 +210,49 @@ async function generarPDF(order) {
   ln(W - M - 58, y + 24, W - M, y + 24, "#94A3B8");
   txt("Firma del tecnico / RepPC", W - M - 2, y + 29, { size: 7, color: "#94A3B8", align: "right" });
 
+  // FOTOS
+  const fotos = [
+    { key: "fotosRecepcion", label: "FOTOS DE INGRESO" },
+    { key: "fotosDurante", label: "FOTOS DURANTE REPARACION" },
+    { key: "fotosListo", label: "FOTOS EQUIPO REPARADO" }
+  ];
+
+  for (const foto of fotos) {
+    const imgs = order[foto.key] || [];
+    if (imgs.length > 0) {
+      chk(30);
+      txt(foto.label, M, y, { size: 8, bold: true, color: "#0369A1" }); y += 8;
+      
+      let xPos = M;
+      let maxHeight = 0;
+      
+      for (let i = 0; i < imgs.length; i++) {
+        try {
+          const imgWidth = 40;
+          const imgHeight = 40;
+          
+          if (xPos + imgWidth > W - M) {
+            y += maxHeight + 5;
+            xPos = M;
+            maxHeight = 0;
+            chk(50);
+          }
+          
+          const base64Image = await urlToBase64(imgs[i]);
+          if (base64Image) {
+            d.addImage(base64Image, "JPEG", xPos, y, imgWidth, imgHeight);
+          }
+          xPos += imgWidth + 5;
+          maxHeight = Math.max(maxHeight, imgHeight);
+        } catch (e) {
+          console.error("Error adding image:", e);
+        }
+      }
+      
+      y += maxHeight + 10;
+    }
+  }
+
   d.save("RepPC_" + order.id + "_" + order.nombre.replace(/\s/g, "_") + ".pdf");
 }
 
@@ -283,6 +340,8 @@ input[type=file]{display:none;}
 .btn-sm{padding:8px 14px;font-size:13px;width:auto;border-radius:8px;}
 @keyframes cp{0%,100%{box-shadow:0 0 10px rgba(6,182,212,.3);}50%{box-shadow:0 0 22px rgba(6,182,212,.7);}}
 @keyframes gp{0%,100%{box-shadow:0 0 10px rgba(245,158,11,.25);}50%{box-shadow:0 0 22px rgba(245,158,11,.6);}}
+@keyframes rocket{0%{transform:translateY(100vh) translateX(0);}100%{transform:translateY(-100vh) translateX(0);}}
+@keyframes neonBorder{0%,100%{box-shadow:inset 0 0 10px rgba(6,182,212,.3), 0 0 5px rgba(6,182,212,.5);}50%{box-shadow:inset 0 0 15px rgba(6,182,212,.6), 0 0 10px rgba(6,182,212,.8);}}
 .gl-cy{animation:cp 2s infinite;}
 .gl-go{animation:gp 2s infinite;}
 .wa{display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:white;border:none;border-radius:12px;padding:13px;font-family:var(--fn);font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;}
@@ -361,9 +420,11 @@ input[type=file]{display:none;}
 .empty{text-align:center;padding:60px 16px;color:var(--mu);}
 .ei{font-size:52px;margin-bottom:14px;}
 p.emp{font-size:15px;line-height:1.6;}
+.accel-btn{position:relative;overflow:hidden;}
+.accel-btn .rocket{position:absolute;pointer-events:none;}
+.cam-picker{display:flex;gap:8px;margin-top:8px;}
 `;
 
-// COMPONENTE PRINCIPAL
 export default function RepPCCore({ viewMode = "both" }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -379,16 +440,16 @@ export default function RepPCCore({ viewMode = "both" }) {
   const [confirmCfg, setConfirmCfg] = useState(null);
   const [search, setSearch] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [pendingAccel, setPendingAccel] = useState(false);
-  const [pendingExcl, setPendingExcl] = useState(false);
   const [showSigCliente, setShowSigCliente] = useState(false);
   const [showSigTecnico, setShowSigTecnico] = useState(false);
+  const [accelClicks, setAccelClicks] = useState(0);
+  const [mesFilter, setMesFilter] = useState("todos");
 
   const [form, setForm] = useState({
     nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "",
-    estado: "recibido", prioridad: "normal",
+    estado: "recibido", prioridad: "normal", prioridadPendiente: false,
     fotosRecepcion: [], fotosDurante: [], fotosListo: [],
-    diagnostico: "", presupuestoMonto: "", costoFinal: "", trabajoRealizado: "",
+    diagnostico: "", presupuestoMonto: "", costoRevision: "", costoFinal: "", trabajoRealizado: "",
     firmaCliente: null, firmaTecnico: null,
   });
 
@@ -445,52 +506,132 @@ export default function RepPCCore({ viewMode = "both" }) {
     catch (e) { console.error("Error eliminando:", e); alert("Error al eliminar."); }
   }
 
-  function fotoF(key, files) { const u = Array.from(files).map(f => URL.createObjectURL(f)); setForm(f => ({ ...f, [key]: [...f[key], ...u] })); }
-  function fotoO(id, key, files) { const u = Array.from(files).map(f => URL.createObjectURL(f)); const o = getO(id); if (o) updO(id, { [key]: [...(o[key] || []), ...u] }); }
+
+  async function fotoF(key, files) {
+    const fileArray = Array.from(files);
+    const urls = [];
+    
+    for (let i = 0; i < fileArray.length; i++) {
+      try {
+        const file = fileArray[i];
+        const timestamp = Date.now();
+        const filename = `${key}_${timestamp}_${i}.jpg`;
+        const storageRef = ref(storage, `temp/${filename}`);
+        
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        urls.push(downloadURL);
+      } catch (e) {
+        console.error("Error uploading foto:", e);
+      }
+    }
+    
+    setForm(f => ({ ...f, [key]: [...f[key], ...urls] }));
+  }
+
+  async function fotoO(id, key, files) {
+    if (!files || files.length === 0) return;
+    
+    const fileArray = Array.from(files);
+    const urls = [];
+    
+    console.log(`Subiendo ${fileArray.length} foto(s) para ${key}...`);
+    
+    for (let i = 0; i < fileArray.length; i++) {
+      try {
+        const file = fileArray[i];
+        const timestamp = Date.now();
+        const filename = `${id}_${key}_${timestamp}_${i}.jpg`;
+        const storageRef = ref(storage, `orders/${id}/${filename}`);
+        
+        console.log(`Subiendo: ${filename}`);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        urls.push(downloadURL);
+        console.log(`✅ Subida exitosa: ${filename}`);
+      } catch (e) {
+        console.error("Error uploading foto:", e);
+        alert(`Error al subir foto: ${e.message}`);
+      }
+    }
+    
+    console.log(`Guardando ${urls.length} URLs en orden...`);
+    const o = getO(id);
+    if (o) {
+      updO(id, { [key]: [...(o[key] || []), ...urls] });
+      console.log(`✅ Orden actualizada con fotos`);
+    } else {
+      console.error("Orden no encontrada:", id);
+    }
+  }
 
   async function createOrder() {
     if (!form.nombre || !form.marca) return alert("Nombre y equipo son obligatorios.");
     const id = genId();
-    const o = { ...form, id, fecha: now(), updatedAt: now(), acelerada: false, presupuestoRespuesta: null, historial: [{ estado: "recibido", fecha: now() }], eventos: [] };
+    const o = { ...form, id, fecha: now(), updatedAt: now(), prioridad: "normal", prioridadPendiente: false, presupuestoRespuesta: null, historial: [{ estado: "recibido", fecha: now() }], eventos: [] };
     try {
       await addDoc(collection(db, "orders"), o);
-      setForm({ nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "", estado: "recibido", prioridad: "normal", fotosRecepcion: [], fotosDurante: [], fotosListo: [], diagnostico: "", presupuestoMonto: "", costoFinal: "", trabajoRealizado: "", firmaCliente: null, firmaTecnico: null });
+      setForm({ nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "", estado: "recibido", prioridad: "normal", prioridadPendiente: false, fotosRecepcion: [], fotosDurante: [], fotosListo: [], diagnostico: "", presupuestoMonto: "", costoRevision: "", costoFinal: "", trabajoRealizado: "", firmaCliente: null, firmaTecnico: null });
       setAdminTab("list");
     } catch (e) { console.error("Error creando:", e); alert("Error al crear la orden."); }
   }
 
-  function confirmarAccel(id) { updO(id, { acelerada: true }); addEv(id, "🚀", "Diagnostico acelerado confirmado - " + fmt(PRECIO_ACCEL)); setPendingAccel(false); }
-  function cancelarAccel(id) {
-    setConfirmCfg({ titulo: "Cancelar diagnostico acelerado", msg: "Seguro que queres cancelar?",
-      onOk: () => { updO(id, { acelerada: false }); addEv(id, "❌", "Diagnostico acelerado cancelado"); setModal(null); }
-    }); setModal("confirm");
-  }
-  function confirmarExcl(id) {
-    const o = getO(id); const m = o.acelerada ? PRECIO_ACCEL : PRECIO_EXCLUS;
-    updO(id, { prioridad: "exclusiva" }); addEv(id, "⭐", "Prioridad Exclusiva confirmada - " + fmt(m) + (o.acelerada ? " (50% OFF)" : "")); setPendingExcl(false);
-  }
-  function cancelarExcl(id) {
-    setConfirmCfg({ titulo: "Cancelar Prioridad Exclusiva", msg: "Seguro que queres cancelar?",
-      onOk: () => { updO(id, { prioridad: "normal" }); addEv(id, "❌", "Prioridad Exclusiva cancelada"); setModal(null); }
-    }); setModal("confirm");
-  }
-
   const filtAll = orders.filter(o => (o.nombre || "").toLowerCase().includes(search.toLowerCase()) || (o.id || "").toLowerCase().includes(search.toLowerCase()) || (o.marca || "").toLowerCase().includes(search.toLowerCase()));
-  const filtActivos = filtAll.filter(o => o.estado !== "entregado");
-  const filtEntregs = filtAll.filter(o => o.estado === "entregado");
+  const filtActivos = filtAll.filter(o => o.estado !== "entregado" && o.estado !== "cancelado");
+  const filtEntregs = filtAll.filter(o => o.estado === "entregado" || o.estado === "cancelado");
   const filtByStatus = statusFilter === "todos" ? filtActivos : filtActivos.filter(o => o.estado === statusFilter);
 
-  function buscarOrden() { const f = orders.find(o => (o.id || "").toLowerCase() === cliCode.trim().toLowerCase()); if (f) setCliId(f.id); else alert("No se encontro una orden con ese codigo."); }
+  function parseMonto(str) {
+    if (!str) return 0;
+    const n = parseFloat(str.replace(/[^0-9.,]/g, "").replace(/\./g, "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
 
-  async function handlePDF(o) { if (!window.jspdf) { alert("PDF cargando..."); return; } setPdfBusy(true); try { await generarPDF(o); } catch (e) { alert("Error: " + e.message); } finally { setPdfBusy(false); } }
+  function getMesAnio(fechaStr) {
+    if (!fechaStr) return null;
+    const [datePart] = fechaStr.split(",");
+    const parts = datePart.trim().split("/");
+    if (parts.length < 3) return null;
+    return parts[1] + "/" + parts[2];
+  }
 
-  const pExclCli = cliO?.acelerada ? PRECIO_ACCEL : PRECIO_EXCLUS;
+  const MESES_NOMBRE = { "01": "Enero", "02": "Febrero", "03": "Marzo", "04": "Abril", "05": "Mayo", "06": "Junio", "07": "Julio", "08": "Agosto", "09": "Septiembre", "10": "Octubre", "11": "Noviembre", "12": "Diciembre" };
+  const entregsConMes = filtEntregs.map(o => ({ ...o, mesAnio: getMesAnio(o.fecha), monto: parseMonto(o.costoFinal) }));
+  const mesesDisponibles = [...new Set(entregsConMes.map(o => o.mesAnio).filter(Boolean))].sort().reverse();
+  const entregsFiltrados = mesFilter === "todos" ? filtEntregs : filtEntregs.filter(o => getMesAnio(o.fecha) === mesFilter);
+  const totalRecaudado = entregsConMes.reduce((s, o) => s + o.monto, 0);
+  const totalMesFiltrado = mesFilter === "todos" ? totalRecaudado : entregsConMes.filter(o => o.mesAnio === mesFilter).reduce((s, o) => s + o.monto, 0);
+  const cantMesFiltrado = entregsFiltrados.length;
+
+  function buscarOrden() {
+    setTimeout(() => {
+      const f = orders.find(o => (o.id || "").toLowerCase() === cliCode.trim().toLowerCase());
+      if (f) setCliId(f.id);
+      else alert("No se encontro una orden con ese codigo.");
+    }, 100);
+  }
+
+  async function handlePDF(o) {
+    if (!window.jspdf) { alert("PDF cargando..."); return; }
+    setPdfBusy(true);
+    try { await generarPDF(o); }
+    catch (e) { alert("Error: " + e.message); }
+    finally { setPdfBusy(false); }
+  }
+
   const bRows = [["Alias", TALLER.alias], ["Titular", TALLER.titular], ["DNI", TALLER.dni]];
 
   function waSend(txt) { window.open(TALLER.waLink + "?text=" + encodeURIComponent(txt), "_blank"); }
   async function sharePres(txt) {
     if (navigator.share) { try { await navigator.share({ text: txt }); return; } catch (_) { } }
     window.open("https://wa.me/?text=" + encodeURIComponent(txt), "_blank");
+  }
+
+  function handleCameraInput(e, key, id) {
+    const files = e.target.files;
+    if (!files) return;
+    if (id) fotoO(id, key, files);
+    else fotoF(key, files);
   }
 
   // ── RENDER ──
@@ -528,7 +669,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                     {listTab === "activos" && (
                       <div className="filt-row">
                         <button className={"filt" + (statusFilter === "todos" ? " on" : "")} onClick={() => setStatusFilter("todos")}>Todos</button>
-                        {ESTADOS.filter(e => e.key !== "entregado").map(e => (
+                        {ESTADOS.filter(e => e.key !== "entregado" && e.key !== "cancelado").map(e => (
                           <button key={e.key} className={"filt" + (statusFilter === e.key ? " on" : "")} onClick={() => setStatusFilter(e.key)}>{e.icon} {e.label}</button>
                         ))}
                       </div>
@@ -543,7 +684,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                             <div key={o.id} className="card" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
                               <div style={{ display: "flex", justifyContent: "space-between" }}>
                                 <span className="cid">{o.id}</span>
-                                <div>{o.prioridad === "exclusiva" && <span className="bdg b-go">⭐</span>}{o.acelerada && <span className="bdg b-bl">🚀</span>}</div>
+                                <div>
+                                  {o.prioridad === "premium" && <span className="bdg b-go">💎 PREMIUM</span>}
+                                  {o.prioridadPendiente && <span className="bdg b-yw">⏳ PENDIENTE</span>}
+                                </div>
                               </div>
                               <div className="cnm">{o.nombre}</div>
                               <div className="cdv">{o.marca}</div>
@@ -555,16 +699,49 @@ export default function RepPCCore({ viewMode = "both" }) {
                     )}
 
                     {listTab === "entregados" && (
-                      filtEntregs.length === 0
-                        ? <div className="empty"><div className="ei">🎉</div><p className="emp">No hay equipos entregados aun.</p></div>
-                        : filtEntregs.map(o => (
-                          <div key={o.id} className="card del" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}><span className="cid cid-g">{o.id}</span><span style={{ fontSize: 11, color: "#6EE7B7", fontWeight: 700 }}>ENTREGADO</span></div>
-                            <div className="cnm">{o.nombre}</div><div className="cdv">{o.marca}</div>
-                            <div className="cdt">{o.fecha}</div>
-                            {o.costoFinal && <div style={{ marginTop: 6, fontSize: 13, color: "#6EE7B7", fontWeight: 700 }}>{o.costoFinal}</div>}
+                      <>
+                        {filtEntregs.length > 0 && (
+                          <div style={{ margin: "0 14px 12px" }}>
+                            <div style={{ background: "linear-gradient(135deg, #064E3B, #0F2040)", border: "1px solid #6EE7B7", borderRadius: 14, padding: 16 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                                <div style={{ fontSize: 11, color: "#6EE7B7", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Recaudacion</div>
+                                <div style={{ fontSize: 11, color: "#6EE7B7" }}>{filtEntregs.length} orden{filtEntregs.length !== 1 ? "es" : ""}</div>
+                              </div>
+                              <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                                <div style={{ flex: 1, background: "rgba(110,231,183,.08)", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 10, color: "#6EE7B7", fontWeight: 600, marginBottom: 4 }}>TOTAL HISTORICO</div>
+                                  <div style={{ fontSize: 20, fontWeight: 800, color: "#6EE7B7", fontFamily: "var(--mo)" }}>{fmt(totalRecaudado)}</div>
+                                </div>
+                                {mesFilter !== "todos" && (
+                                  <div style={{ flex: 1, background: "rgba(6,182,212,.08)", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                                    <div style={{ fontSize: 10, color: "var(--cy)", fontWeight: 600, marginBottom: 4 }}>{(() => { const [m] = mesFilter.split("/"); return (MESES_NOMBRE[m] || mesFilter).toUpperCase(); })()}</div>
+                                    <div style={{ fontSize: 20, fontWeight: 800, color: "var(--cy)", fontFamily: "var(--mo)" }}>{fmt(totalMesFiltrado)}</div>
+                                    <div style={{ fontSize: 10, color: "var(--mu)", marginTop: 2 }}>{cantMesFiltrado} orden{cantMesFiltrado !== 1 ? "es" : ""}</div>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                <button className={"filt" + (mesFilter === "todos" ? " on" : "")} onClick={() => setMesFilter("todos")} style={{ fontSize: 10 }}>Todos</button>
+                                {mesesDisponibles.map(ma => {
+                                  const [m, y] = ma.split("/");
+                                  return <button key={ma} className={"filt" + (mesFilter === ma ? " on" : "")} onClick={() => setMesFilter(ma)} style={{ fontSize: 10 }}>{(MESES_NOMBRE[m] || m) + " " + y}</button>;
+                                })}
+                              </div>
+                            </div>
                           </div>
-                        ))
+                        )}
+                        {entregsFiltrados.length === 0
+                          ? <div className="empty"><div className="ei">🎉</div><p className="emp">{mesFilter !== "todos" ? "No hay entregas en este mes." : "No hay equipos entregados aun."}</p></div>
+                          : entregsFiltrados.map(o => (
+                            <div key={o.id} className="card del" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
+                              <div style={{ display: "flex", justifyContent: "space-between" }}><span className="cid cid-g">{o.id}</span><span style={{ fontSize: 11, color: o.estado === "cancelado" ? "#FCA5A5" : "#6EE7B7", fontWeight: 700 }}>{o.estado === "cancelado" ? "CANCELADO" : "ENTREGADO"}</span></div>
+                              <div className="cnm">{o.nombre}</div><div className="cdv">{o.marca}</div>
+                              <div className="cdt">{o.fecha}</div>
+                              {o.costoFinal && <div style={{ marginTop: 6, fontSize: 13, color: "#6EE7B7", fontWeight: 700 }}>{o.costoFinal}</div>}
+                            </div>
+                          ))
+                        }
+                      </>
                     )}
                     <div style={{ height: 90 }} />
                     <button className="fab" onClick={() => setAdminTab("new")}>+</button>
@@ -588,9 +765,16 @@ export default function RepPCCore({ viewMode = "both" }) {
                     <div className="fg"><label>Notas internas</label><textarea value={form.notas} onChange={e => uf("notas", e.target.value)} placeholder="Observaciones..." style={{ minHeight: 60 }} /></div>
                     <div className="fg">
                       <label>Fotos en recepcion</label>
+                      <div className="cam-picker">
+                        <label style={{ flex: 1 }} className="pa" htmlFor="fR-cam">
+                          📷<input id="fR-cam" type="file" accept="image/*" capture="environment" onChange={e => fotoF("fotosRecepcion", e.target.files).catch(err => console.error("Error:", err))} />
+                        </label>
+                        <label style={{ flex: 1 }} className="pa" htmlFor="fR-gal">
+                          🖼️<input id="fR-gal" type="file" accept="image/*" multiple onChange={e => fotoF("fotosRecepcion", e.target.files).catch(err => console.error("Error:", err))} />
+                        </label>
+                      </div>
                       <div className="pr">
                         {form.fotosRecepcion.map((u, i) => <img key={i} src={u} className="pt" alt="" />)}
-                        <label className="pa" htmlFor="fR">+<input id="fR" type="file" accept="image/*" multiple onChange={e => fotoF("fotosRecepcion", e.target.files)} /></label>
                       </div>
                     </div>
 
@@ -635,35 +819,41 @@ export default function RepPCCore({ viewMode = "both" }) {
                       <div style={{ color: "var(--cy)", fontSize: 12, fontFamily: "var(--mo)", letterSpacing: 1 }}>{selO.id}</div>
                     </div>
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                      {selO.prioridad === "exclusiva" && <span className="bdg b-go">⭐</span>}
-                      {selO.acelerada && <span className="bdg b-bl">🚀</span>}
+                      {selO.prioridad === "exclusiva" && <span className="bdg b-go">⭐ EXCLUSIVA</span>}
                     </div>
                   </div>
 
                   <div className="iblk">
-                    {[["Equipo", selO.marca], ["Telefono", selO.telefono || "-"], ["Problema", selO.problema || "-"], ["Accesorios", selO.accesorios || "-"], ["Ingreso", selO.fecha]].map(([l, v]) => (
+                    {[["Equipo", selO.marca], ["Telefono", selO.telefono || "-"], ["Problema", selO.problema || "-"], ["Accesorios", selO.accesorios || "-"], ["Notas", selO.notas || "-"], ["Ingreso", selO.fecha]].map(([l, v]) => (
                       <div key={l} className="irow"><span className="ik">{l}</span><span className="iv">{v}</span></div>
                     ))}
                     {selO.firmaCliente && <div className="irow"><span className="ik">Firma cliente</span><span className="iv"><img src={selO.firmaCliente} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
                     {selO.firmaTecnico && <div className="irow"><span className="ik">Firma tecnico</span><span className="iv"><img src={selO.firmaTecnico} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
                   </div>
 
-                  {/* PAGOS */}
-                  <div className="sec">Confirmar pagos recibidos</div>
-                  <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-                    {!selO.acelerada ? (
-                      <button className="btn b-gn" onClick={() => confirmarAccel(selO.id)}>Confirmar diagnostico acelerado - {fmt(PRECIO_ACCEL)}</button>
+                  {/* ESTADO */}
+                  {/* PRIORIDAD - CONTROL ADMIN */}
+                  <div className="sec">Prioridad de reparación</div>
+                  <div style={{ padding: "0 14px 12px" }}>
+                    {selO.prioridad === "normal" ? (
+                      <button className="btn b-go" onClick={() => { updO(selO.id, { prioridad: "premium", prioridadPendiente: false }); addEv(selO.id, "💎", "Admin cambio prioridad a Premium"); }}>
+                        Cambiar a Premium - {fmt(PRECIO_EXCLUS)}
+                      </button>
                     ) : (
-                      <div className="pay-row"><div className="pay-ok pay-cy">Diagnostico acelerado - {fmt(PRECIO_ACCEL)}</div><button className="pay-x" onClick={() => cancelarAccel(selO.id)}>Cancelar</button></div>
+                      <>
+                        <div className="bn-go" style={{ marginBottom: 8 }}>💎 Prioridad Premium Activa</div>
+                        <button className="btn b-re" onClick={() => { updO(selO.id, { prioridad: "normal" }); addEv(selO.id, "↩️", "Admin cambio prioridad a Normal"); }}>Cambiar a Normal</button>
+                      </>
                     )}
-                    {selO.prioridad !== "exclusiva" ? (
-                      <button className="btn b-go" onClick={() => confirmarExcl(selO.id)}>Confirmar Prioridad Exclusiva - {selO.acelerada ? fmt(PRECIO_ACCEL) + " (50% OFF)" : fmt(PRECIO_EXCLUS)}</button>
-                    ) : (
-                      <div className="pay-row"><div className="pay-ok pay-go">Prioridad Exclusiva{selO.acelerada ? " - 50% OFF" : ""}</div><button className="pay-x" onClick={() => cancelarExcl(selO.id)}>Cancelar</button></div>
+                    {selO.prioridadPendiente && (
+                      <div style={{ marginTop: 8, display: "flex", gap: 8, flexDirection: "column" }}>
+                        <div className="bn-yw">⏳ Cliente solicito Premium - Pendiente confirmación</div>
+                        <button className="btn b-yw" onClick={() => { updO(selO.id, { prioridadPendiente: false }); addEv(selO.id, "❌", "Admin cancelo solicitud de Premium"); }}>Cancelar solicitud</button>
+                      </div>
                     )}
                   </div>
 
-                  {/* ESTADO */}
+                  {/* ESTADO ACTUAL */}
                   <div className="sec">Estado actual</div>
                   <div style={{ padding: "0 14px 12px" }}>
                     <div className="sgrid">
@@ -675,13 +865,14 @@ export default function RepPCCore({ viewMode = "both" }) {
                     </div>
                   </div>
 
-                  {/* ETAPA: DIAGNOSTICO (recibido/diagnostico) */}
+                  {/* ETAPA: DIAGNOSTICO */}
                   {(selO.estado === "recibido" || selO.estado === "diagnostico") && (
                     <>
                       <div className="sec">Diagnostico y presupuesto</div>
                       <div style={{ padding: "0 14px 12px" }}>
                         <div className="fg"><label>Diagnostico del equipo</label><textarea value={selO.diagnostico || ""} onChange={e => updO(selO.id, { diagnostico: e.target.value })} placeholder="Describe el problema encontrado..." /></div>
                         <div className="fg"><label>Monto del presupuesto</label><input value={selO.presupuestoMonto || ""} onChange={e => updO(selO.id, { presupuestoMonto: e.target.value })} placeholder="Ej. $65.000 ARS" /></div>
+                        <div className="fg"><label>Costo de revision / diagnostico</label><input value={selO.costoRevision || ""} onChange={e => updO(selO.id, { costoRevision: e.target.value })} placeholder="Ej. $30.000 ARS" /></div>
                         {selO.presupuestoMonto ? (
                           <button className="btn b-cy" onClick={() => {
                             updO(selO.id, { estado: "presupuesto", presupuestoRespuesta: null });
@@ -736,7 +927,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                         <div className="fg"><label>Trabajo realizado</label><textarea value={selO.trabajoRealizado || ""} onChange={e => updO(selO.id, { trabajoRealizado: e.target.value })} placeholder="Describe todo lo que se hizo..." /></div>
                         <button className="btn b-cy" style={{ marginBottom: 8 }} onClick={() => {
                           addEv(selO.id, "✅", "Aviso enviado - equipo listo para retirar");
-                          sharePres("Hola " + selO.nombre + "!\n\nTu equipo esta listo para retirar.\n\nOrden: " + selO.id + "\nEquipo: " + selO.marca + "\n" + (selO.costoFinal ? "Costo final: " + selO.costoFinal + "\n" : "") + "\nRecorda que tenes 30 dias para retirarlo sin cargo adicional. Accedé a nuestra web para ver el estado actual colocando el código de tu orden. https://taller-gestion-bay.vercel.app/cliente .  \n\nRepPC");
+                          sharePres("Hola " + selO.nombre + "!\n\nTu equipo esta listo para retirar.\n\nOrden: " + selO.id + "\nEquipo: " + selO.marca + "\n" + (selO.costoFinal ? "Costo final: " + selO.costoFinal + "\n" : "") + "\nRecorda que tenes 30 dias para retirarlo sin cargo adicional.\n\nRepPC");
                         }}>Enviar aviso - equipo listo para retirar</button>
                       </div>
                     </>
@@ -746,9 +937,16 @@ export default function RepPCCore({ viewMode = "both" }) {
                   {[["fotosRecepcion", "Fotos Recepcion"], ["fotosDurante", "Fotos Durante"], ["fotosListo", "Fotos Terminado"]].map(([key, lbl]) => (
                     <div key={key} style={{ padding: "0 14px 12px" }}>
                       <div className="plbl">{lbl}</div>
+                      <div className="cam-picker">
+                        <label style={{ flex: 1 }} className="pa" htmlFor={"ph-" + key + "-cam"}>
+                          📷<input id={"ph-" + key + "-cam"} type="file" accept="image/*" capture="environment" onChange={e => fotoO(selO.id, key, e.target.files).catch(err => console.error("Error:", err))} />
+                        </label>
+                        <label style={{ flex: 1 }} className="pa" htmlFor={"ph-" + key + "-gal"}>
+                          🖼️<input id={"ph-" + key + "-gal"} type="file" accept="image/*" multiple onChange={e => fotoO(selO.id, key, e.target.files).catch(err => console.error("Error:", err))} />
+                        </label>
+                      </div>
                       <div className="pr">
                         {(selO[key] || []).map((u, i) => <img key={i} src={u} className="pt" alt="" />)}
-                        <label className="pa" htmlFor={"ph-" + key}>+<input id={"ph-" + key} type="file" accept="image/*" multiple onChange={e => fotoO(selO.id, key, e.target.files)} /></label>
                       </div>
                     </div>
                   ))}
@@ -798,8 +996,9 @@ export default function RepPCCore({ viewMode = "both" }) {
                 <div className="h-logo"><div className="h-ic">🖥️</div><div className="h-nm">RepPC</div></div>
                 <div className="h-sb">Reparacion de PC</div>
                 <div style={{ fontWeight: 700, fontSize: 19, color: "var(--wh)", marginBottom: 8 }}>Seguimiento de tu equipo</div>
-                <div style={{ color: "var(--mu)", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>Ingresa el codigo que te enviamos por WhatsApp</div>
-                <input placeholder="Ej. RP-AB4K" value={cliCode} onChange={e => setCliCode(e.target.value.toUpperCase())}
+                <div style={{ color: "var(--mu)", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>Ingresa el codigo que te enviamos por WhatsApp.
+                  En caso de ERROR presiona "Ver mi orden" una vez más.</div>
+                <input placeholder="Ej. AB4K5" value={cliCode} onChange={e => setCliCode(e.target.value.toUpperCase())}
                   style={{ textAlign: "center", fontSize: 22, fontFamily: "var(--mo)", letterSpacing: 3, marginBottom: 12, width: "100%", background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 10, color: "var(--wh)", padding: "12px 14px", outline: "none" }} />
                 <button className="btn b-cy" onClick={buscarOrden}>Ver mi orden</button>
               </div>
@@ -807,9 +1006,7 @@ export default function RepPCCore({ viewMode = "both" }) {
               const o = cliO;
               const curIdx = eIdx(o.estado);
               const est = ESTADOS.find(e => e.key === o.estado);
-              const canAcc = !o.acelerada && (o.estado === "recibido" || o.estado === "diagnostico");
-              const canExc = o.prioridad !== "exclusiva" && o.estado !== "listo" && o.estado !== "entregado";
-              const hasDesc = o.acelerada && canExc;
+              const canAccel = o.estado === "recibido" || o.estado === "diagnostico";
 
               return (
                 <>
@@ -821,26 +1018,57 @@ export default function RepPCCore({ viewMode = "both" }) {
                     <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
                       <span className="cst" style={{ color: est?.color, fontSize: 14 }}>{est?.icon} {est?.label}</span>
                       {o.prioridad === "exclusiva" && <span className="bdg b-go">EXCLUSIVA</span>}
-                      {o.acelerada && <span className="bdg b-bl">ACELERADA</span>}
                     </div>
                     <div className="h-ac">
-                      {canAcc && <button className="btn b-bl gl-cy" onClick={() => { setMStep(1); setModal("acelerar"); }}>Acelerar diagnostico - {fmt(PRECIO_ACCEL)}</button>}
-                      {canExc && (
+                      {(o.estado === "recibido" || o.estado === "diagnostico") && o.prioridad === "normal" && !o.prioridadPendiente && (
                         <div>
-                          {hasDesc && <div style={{ textAlign: "center", marginBottom: 6 }}><span className="disc-old">{fmt(PRECIO_EXCLUS)}</span><span className="disc-tag">50% OFF</span></div>}
-                          <button className="btn b-go gl-go" onClick={() => { setMStep(1); setModal("exclusiva"); }}>Prioridad Exclusiva - {fmt(pExclCli)}</button>
+                          <button className="btn accel-btn" style={{ background: "linear-gradient(135deg, #0369A1, #06B6D4)", marginBottom: 12, position: "relative", animation: accelClicks >= 1 ? "neonBorder 2s ease-in-out infinite" : "none" }} onClick={() => {
+                            const newClicks = accelClicks + 1;
+                            setAccelClicks(newClicks);
+                            
+                            if (newClicks >= 6) {
+                              setModal("premiumModal");
+                            }
+                            
+                            addEv(o.id, "🚀", "Cliente presiono acelerar (" + newClicks + "x)");
+                            
+                            for (let i = 0; i < 8; i++) {
+                              setTimeout(() => {
+                                const r = document.createElement("div");
+                                r.textContent = "🚀";
+                                r.style.position = "fixed";
+                                r.style.left = Math.random() * window.innerWidth + "px";
+                                r.style.bottom = "0";
+                                r.style.fontSize = "48px";
+                                r.style.animation = "rocket 3s linear forwards";
+                                r.style.pointerEvents = "none";
+                                r.style.zIndex = "9999";
+                                document.body.appendChild(r);
+                                setTimeout(() => r.remove(), 3000);
+                              }, i * 80);
+                            }
+                          }}>Acelerar diagnóstico</button>
+                          <div style={{ fontSize: 13, color: "#E0F2FE", textAlign: "center", marginBottom: 12, lineHeight: 1.8, padding: "12px 14px", background: "rgba(6,182,212,.08)", borderRadius: 10, border: "1px solid rgba(6,182,212,.2)" }}>
+                            ¿Tienes prisa? Presiona el botón "Acelerar Diagnóstico" para notificar a nuestro equipo. Cada pulsación cuenta como una solicitud urgente.
+                          </div>
+                          <div style={{ background: "rgba(110,231,183,.1)", border: "1px solid rgba(110,231,183,.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6EE7B7", textAlign: "center", fontWeight: 600 }}>
+                            Prioridad: NORMAL - Por orden de ingreso
+                          </div>
+                          <button className="btn b-yw" style={{ marginTop: 8 }} onClick={() => setModal("premiumModal")}>¿Deseas cambiar la prioridad de reparación?</button>
                         </div>
                       )}
-                      {o.acelerada && <div className="bn-cy">Tu diagnostico esta siendo acelerado</div>}
-                      {o.prioridad === "exclusiva" && <div className="bn-go">Tu equipo tiene Prioridad Exclusiva</div>}
-                      {pendingAccel && !o.acelerada && <div style={{ background: "rgba(251,191,36,.1)", border: "1px solid rgba(251,191,36,.3)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#FCD34D", fontWeight: 600, textAlign: "center" }}>Recibimos tu solicitud - pendiente de confirmacion</div>}
-                      {pendingExcl && o.prioridad !== "exclusiva" && <div style={{ background: "rgba(251,191,36,.1)", border: "1px solid rgba(251,191,36,.3)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#FCD34D", fontWeight: 600, textAlign: "center" }}>Recibimos tu solicitud - pendiente de confirmacion</div>}
+                      {o.prioridad === "premium" && !o.prioridadPendiente && (
+                        <div className="bn-go">💎 Tu equipo tiene Prioridad Premium - Saltás la cola de espera</div>
+                      )}
+                      {o.prioridadPendiente && o.prioridad !== "premium" && (
+                        <div className="bn-yw">⏳ Tu solicitud de Prioridad Premium está pendiente de confirmación</div>
+                      )}
                     </div>
                   </div>
 
                   <div className="sec">Progreso de tu reparacion</div>
                   <div className="tl-wrap">
-                    {ESTADOS.filter(e => e.key !== "entregado" || curIdx >= ESTADOS.findIndex(x => x.key === "entregado")).map((e, i, arr) => {
+                    {ESTADOS.filter(e => e.key !== "entregado" && e.key !== "cancelado" || curIdx >= ESTADOS.findIndex(x => x.key === e.key)).map((e, i, arr) => {
                       const dn = i < curIdx, cu = i === curIdx, last = i === arr.length - 1;
                       return (
                         <div key={e.key} className="tl">
@@ -869,6 +1097,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                           Pasados los 30 dias se aplica recargo diario. A los 90 dias se declara abandono segun Art. 2525, 2375, 2524 y 2523 del Codigo Civil y Comercial.
                         </div>
                         {o.costoFinal && <div className="pamt"><span className="pk">Costo final</span><span className="pv">{o.costoFinal}</span></div>}
+                        {o.trabajoRealizado && <div style={{ background: "var(--s1)", borderRadius: 10, padding: "12px 14px", marginBottom: 8, fontSize: 13, color: "var(--wh)", lineHeight: 1.6 }}><div style={{ fontSize: 11, color: "var(--mu)", fontWeight: 600, marginBottom: 6 }}>TRABAJO REALIZADO</div>{o.trabajoRealizado}</div>}
                         <button className="wa" style={{ marginBottom: 0 }} onClick={() => waSend("Hola! Me comunico por mi orden " + o.id + ". Quiero coordinar el retiro. Gracias!")}>Consultar por WhatsApp</button>
                       </div>
                     </div>
@@ -886,7 +1115,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                           <div style={{ marginTop: 14 }}>
                             <div style={{ fontSize: 13, color: "var(--mu)", marginBottom: 10, lineHeight: 1.5 }}>Para continuar, confirma si aceptas:</div>
                             <div className="row2">
-                              <button className="btn b-re" style={{ flex: 1 }} onClick={() => { updO(o.id, { presupuestoRespuesta: "rechazado" }); addEv(o.id, "❌", "Cliente rechazo el presupuesto"); waSend("Hola! Sobre mi orden " + o.id + ", no acepto el presupuesto de " + o.presupuestoMonto + ". Gracias!"); }}>No acepto</button>
+                              <button className="btn b-re" style={{ flex: 1 }} onClick={() => setModal("rechazadoPresup")}>No acepto</button>
                               <button className="btn b-cy" style={{ flex: 1 }} onClick={() => setModal("aceptarPres")}>Acepto</button>
                             </div>
                           </div>
@@ -914,7 +1143,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                       <div className="irow"><span className="ik">Actualizado</span><span className="iv">{o.updatedAt}</span></div>
                       {o.accesorios && <div className="irow"><span className="ik">Accesorios</span><span className="iv">{o.accesorios}</span></div>}
                     </div>
-                    <button className="btn b-gh" style={{ marginBottom: 28 }} onClick={() => { setCliId(null); setCliCode(""); }}>Volver</button>
+                    <button className="btn b-gh" style={{ marginBottom: 28 }} onClick={() => { setCliId(null); setCliCode(""); setAccelClicks(0); }}>Volver</button>
                   </div>
                 </>
               );
@@ -923,73 +1152,27 @@ export default function RepPCCore({ viewMode = "both" }) {
         )}
 
         {/* MODALES */}
-        {modal === "acelerar" && (
+        {modal === "premiumModal" && cliO && (
           <div className="overlay" onClick={() => setModal(null)}>
-            <div className="modal m-cy" onClick={e => e.stopPropagation()}>
-              {mStep === 1 && (<>
-                <h2 style={{ color: "var(--cy)" }}>Acelerar diagnostico</h2>
-                <div className="msub">Tu equipo pasara al frente de la cola.</div>
-                <div className="warn-cy"><p>El costo es <strong>{fmt(PRECIO_ACCEL)}</strong>, un <strong>monto adicional extra</strong> al presupuesto. No se descuenta.</p></div>
-                <div className="row2">
-                  <button className="btn b-gh" style={{ flex: 1 }} onClick={() => setModal(null)}>No, espero</button>
-                  <button className="btn b-cy" style={{ flex: 1 }} onClick={() => setMStep(2)}>Si, acelerar</button>
-                </div>
-              </>)}
-              {mStep === 2 && (<>
-                <h2 style={{ color: "var(--cy)" }}>Datos de transferencia</h2>
-                <div className="bbox">
-                  <div className="bamt" style={{ color: "var(--cy)" }}>{fmt(PRECIO_ACCEL)}</div>
-                  <div className="bnote bn-b">Monto adicional - no se descuenta.</div>
-                  {bRows.map(([k, v]) => <div key={k} className="brow"><span className="bk">{k}</span><span className="bv">{v}</span></div>)}
-                  <div className="walert">Verificar titular: <strong>{TALLER.titular} - DNI {TALLER.dni}</strong></div>
-                </div>
-                <button className="wa" onClick={() => { setPendingAccel(true); setModal(null); waSend("Hola! Quiero acelerar el diagnostico de mi orden " + cliO?.id + ". Monto: " + fmt(PRECIO_ACCEL) + ". Te envio el comprobante."); }}>Enviar comprobante por WhatsApp</button>
-                <button className="btn b-gh" onClick={() => setMStep(1)}>Volver</button>
-              </>)}
+            <div className="modal m-yw" onClick={e => e.stopPropagation()}>
+              <h2 style={{ color: "#FCD34D" }}>Prioridad Premium</h2>
+              <div className="msub">{fmt(PRECIO_EXCLUS)} - Saltás la cola de espera</div>
+              <div className="warn-yw"><p>Es un <strong>monto adicional</strong> que <strong>no es reembolsable</strong>.</p></div>
+              <div className="bbox">
+                <div className="bamt" style={{ color: "#FCD34D" }}>{fmt(PRECIO_EXCLUS)}</div>
+                <div className="bnote bn-g">Monto adicional - no se descuenta.</div>
+                {bRows.map(([k, v]) => <div key={k} className="brow"><span className="bk">{k}</span><span className="bv">{v}</span></div>)}
+                <div className="walert">Verificar titular: <strong>{TALLER.titular} - DNI {TALLER.dni}</strong></div>
+              </div>
+              <div className="row2">
+                <button className="btn b-gh" style={{ flex: 1 }} onClick={() => setModal(null)}>No, espero</button>
+                <button className="wa" onClick={() => { updO(cliO.id, { prioridadPendiente: true }); addEv(cliO.id, "⏳", "Cliente solicito Prioridad Premium"); setModal(null); waSend("Hola! Quiero Prioridad Premium para mi orden " + cliO.id + ". Monto: " + fmt(PRECIO_EXCLUS) + " (no reembolsable). Te envio el comprobante."); }}>Enviar comprobante</button>
+              </div>
             </div>
           </div>
         )}
 
-        {modal === "exclusiva" && (
-          <div className="overlay" onClick={() => setModal(null)}>
-            <div className="modal m-go" onClick={e => e.stopPropagation()}>
-              {mStep === 1 && (<>
-                <h2 style={{ color: "var(--go)" }}>Prioridad Exclusiva</h2>
-                <div className="msub">Tu equipo salta toda la cola. Maxima prioridad.</div>
-                {cliO?.acelerada && (
-                  <div className="disc-box">
-                    <div style={{ fontWeight: 700, color: "#4ADE80", fontSize: 14, marginBottom: 4 }}>Precio especial</div>
-                    <div style={{ fontSize: 13, color: "var(--tx)", lineHeight: 1.5 }}>50% de descuento por haber abonado el diagnostico acelerado.</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                      <span className="disc-old">{fmt(PRECIO_EXCLUS)}</span>
-                      <span className="disc-new">{fmt(pExclCli)}</span>
-                    </div>
-                  </div>
-                )}
-                <div className="warn-go"><p>Es un <strong>monto adicional extra</strong> al presupuesto. No se descuenta.</p></div>
-                <div className="row2">
-                  <button className="btn b-gh" style={{ flex: 1 }} onClick={() => setModal(null)}>No, espero</button>
-                  <button className="btn b-go" style={{ flex: 1 }} onClick={() => setMStep(2)}>Si, quiero</button>
-                </div>
-              </>)}
-              {mStep === 2 && (<>
-                <h2 style={{ color: "var(--go)" }}>Datos de transferencia</h2>
-                <div className="bbox">
-                  {cliO?.acelerada && <div className="bamt-old">{fmt(PRECIO_EXCLUS)}</div>}
-                  <div className="bamt" style={{ color: "var(--go)" }}>{fmt(pExclCli)}</div>
-                  {cliO?.acelerada && <div style={{ textAlign: "center", marginBottom: 8 }}><span style={{ background: "rgba(34,197,94,.15)", border: "1px solid rgba(34,197,94,.4)", color: "#4ADE80", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>50% OFF</span></div>}
-                  <div className="bnote bn-g">Monto adicional - no se descuenta.</div>
-                  {bRows.map(([k, v]) => <div key={k} className="brow"><span className="bk">{k}</span><span className="bv">{v}</span></div>)}
-                  <div className="walert">Verificar titular: <strong>{TALLER.titular} - DNI {TALLER.dni}</strong></div>
-                </div>
-                <button className="wa" onClick={() => { setPendingExcl(true); setModal(null); waSend("Hola! Quiero Prioridad Exclusiva para mi orden " + cliO?.id + (cliO?.acelerada ? " (50% OFF)" : "") + ". Monto: " + fmt(pExclCli) + ". Te envio el comprobante."); }}>Enviar comprobante por WhatsApp</button>
-                <button className="btn b-gh" onClick={() => setMStep(1)}>Volver</button>
-              </>)}
-            </div>
-          </div>
-        )}
-
-        {modal === "aceptarPres" && (
+        {modal === "aceptarPres" && cliO && (
           <div className="overlay" onClick={() => setModal(null)}>
             <div className="modal m-cy" onClick={e => e.stopPropagation()}>
               <h2 style={{ color: "var(--cy)" }}>Confirmar presupuesto</h2>
@@ -1004,6 +1187,22 @@ export default function RepPCCore({ viewMode = "both" }) {
                   setModal(null);
                   waSend("Hola! Confirmo que ACEPTO el presupuesto de " + cliO.presupuestoMonto + " para mi orden " + cliO.id + ". Procede con la reparacion. Gracias!");
                 }}>Si, confirmo</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modal === "rechazadoPresup" && cliO && (
+          <div className="overlay" onClick={() => setModal(null)}>
+            <div className="modal m-re" onClick={e => e.stopPropagation()}>
+              <h2 style={{ color: "#FCA5A5" }}>Presupuesto rechazado</h2>
+              <div className="msub">¿Quieres cancelar la reparación?</div>
+              <div className="warn-go" style={{ borderColor: "rgba(239,68,68,.3)", background: "rgba(239,68,68,.07)" }}>
+                <p>Deberás abonar el <strong>costo de la revisión y diagnóstico</strong> al retirar el equipo: <strong>{cliO.costoRevision || "$0"}</strong></p>
+              </div>
+              <div className="row2">
+                <button className="btn b-gh" style={{ flex: 1 }} onClick={() => setModal(null)}>No, volver</button>
+                <button className="btn b-re" style={{ flex: 1 }} onClick={() => { updO(cliO.id, { presupuestoRespuesta: "rechazado", estado: "cancelado" }); addEv(cliO.id, "❌", "Cliente rechazo el presupuesto"); setModal(null); waSend("Hola! Confirmo que RECHAZO el presupuesto de " + cliO.presupuestoMonto + " para mi orden " + cliO.id + ". Necesito retirar mi equipo. Abonaré el costo de revisión/diagnóstico: " + (cliO.costoRevision || "$0") + ". Gracias!"); }}>Si, confirmar rechazo</button>
               </div>
             </div>
           </div>
