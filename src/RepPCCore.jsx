@@ -341,7 +341,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fn);min-height:100vh
 .sopt.on{border-color:var(--cy);background:rgba(6,182,212,.1);color:var(--cy);}
 .si{font-size:20px;display:block;margin-bottom:4px;}
 .pr{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
-.pt{width:72px;height:72px;border-radius:10px;object-fit:cover;border:1px solid var(--bd);}
+.pt{width:72px;height:72px;border-radius:10px;object-fit:cover;border:1px solid var(--bd);display:block;}
+.pt-wrap{position:relative;width:72px;height:72px;}
+.pt-del{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:none;background:var(--re);color:#fff;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 6px rgba(0,0,0,.4);}
+.pt-del:hover{background:#DC2626;transform:scale(1.1);}
+.pt-del:active{transform:scale(.95);}
 .pa{width:72px;height:72px;border-radius:10px;border:2px dashed var(--bd);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;color:var(--mu);background:var(--s2);transition:all .2s;}
 .pa:hover{border-color:var(--cy);color:var(--cy);}
 .plbl{font-size:11px;color:var(--mu);margin:4px 0;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
@@ -570,6 +574,19 @@ export default function RepPCCore({ viewMode = "both" }) {
     if (o) updO(id, { [key]: [...(o[key] || []), ...u] });
   }
 
+  // Elimina una foto del formulario (orden aún no creada)
+  function eliminarFotoForm(key, index) {
+    setForm(f => ({ ...f, [key]: f[key].filter((_, i) => i !== index) }));
+  }
+
+  // Elimina una foto de una orden existente
+  function eliminarFotoOrden(id, key, index) {
+    const o = getO(id);
+    if (!o) return;
+    const nuevas = (o[key] || []).filter((_, i) => i !== index);
+    updO(id, { [key]: nuevas });
+  }
+
   async function createOrder() {
     if (!form.nombre || !form.marca) return alert("Nombre y equipo son obligatorios.");
     const id = genId();
@@ -779,7 +796,24 @@ export default function RepPCCore({ viewMode = "both" }) {
                         </label>
                       </div>
                       <div className="pr">
-                        {form.fotosRecepcion.map((u, i) => <img key={i} src={u} className="pt" alt="" />)}
+                        {form.fotosRecepcion.map((u, i) => (
+                          <div key={i} className="pt-wrap">
+                            <img src={u} className="pt" alt="" />
+                            <button
+                              type="button"
+                              className="pt-del"
+                              title="Eliminar imagen"
+                              onClick={() => {
+                                setConfirmCfg({
+                                  titulo: "Eliminar imagen",
+                                  msg: "Seguro que queres eliminar esta imagen? No se puede deshacer.",
+                                  onOk: () => { eliminarFotoForm("fotosRecepcion", i); setModal(null); }
+                                });
+                                setModal("confirm");
+                              }}
+                            >🗑️</button>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -951,7 +985,24 @@ export default function RepPCCore({ viewMode = "both" }) {
                         </label>
                       </div>
                       <div className="pr">
-                        {(selO[key] || []).map((u, i) => <img key={i} src={u} className="pt" alt="" />)}
+                        {(selO[key] || []).map((u, i) => (
+                          <div key={i} className="pt-wrap">
+                            <img src={u} className="pt" alt="" />
+                            <button
+                              type="button"
+                              className="pt-del"
+                              title="Eliminar imagen"
+                              onClick={() => {
+                                setConfirmCfg({
+                                  titulo: "Eliminar imagen",
+                                  msg: "Seguro que queres eliminar esta imagen? No se puede deshacer.",
+                                  onOk: () => { eliminarFotoOrden(selO.id, key, i); setModal(null); }
+                                });
+                                setModal("confirm");
+                              }}
+                            >🗑️</button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
