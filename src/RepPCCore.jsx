@@ -905,7 +905,7 @@ export default function RepPCCore({ viewMode = "both" }) {
                   </div>
 
                   {/* ETAPA: DIAGNOSTICO */}
-                  {(selO.estado === "recibido" || selO.estado === "diagnostico") && (
+                  {selO.estado === "diagnostico" && (
                     <>
                       <div className="sec">Diagnostico y presupuesto</div>
                       <div style={{ padding: "0 14px 12px" }}>
