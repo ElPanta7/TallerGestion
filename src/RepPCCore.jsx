@@ -530,8 +530,12 @@ export default function RepPCCore({ viewMode = "both" }) {
   }
 
   async function fotoO(id, key, files) {
+    if (!files || files.length === 0) return;
+    
     const fileArray = Array.from(files);
     const urls = [];
+    
+    console.log(`Subiendo ${fileArray.length} foto(s) para ${key}...`);
     
     for (let i = 0; i < fileArray.length; i++) {
       try {
@@ -540,16 +544,25 @@ export default function RepPCCore({ viewMode = "both" }) {
         const filename = `${id}_${key}_${timestamp}_${i}.jpg`;
         const storageRef = ref(storage, `orders/${id}/${filename}`);
         
+        console.log(`Subiendo: ${filename}`);
         await uploadBytes(storageRef, file);
         const downloadURL = await getDownloadURL(storageRef);
         urls.push(downloadURL);
+        console.log(`✅ Subida exitosa: ${filename}`);
       } catch (e) {
         console.error("Error uploading foto:", e);
+        alert(`Error al subir foto: ${e.message}`);
       }
     }
     
+    console.log(`Guardando ${urls.length} URLs en orden...`);
     const o = getO(id);
-    if (o) updO(id, { [key]: [...(o[key] || []), ...urls] });
+    if (o) {
+      updO(id, { [key]: [...(o[key] || []), ...urls] });
+      console.log(`✅ Orden actualizada con fotos`);
+    } else {
+      console.error("Orden no encontrada:", id);
+    }
   }
 
   async function createOrder() {
