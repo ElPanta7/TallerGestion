@@ -196,6 +196,90 @@ async function generarPDF(order) {
   ln(W - M - 58, y + 24, W - M, y + 24, "#94A3B8");
   txt("Firma del tecnico / RepPC", W - M - 2, y + 29, { size: 7, color: "#94A3B8", align: "right" });
 
+  // FOTOS DE LA ORDEN
+  // Agrupa las fotos cargadas en cada etapa y las dibuja al final.
+  // Soporta dataURL (base64). Si por compatibilidad apareciera una blob URL
+  // antigua, se intenta convertir a dataURL antes de insertarla.
+  const gruposFotos = [
+    ["fotosRecepcion", "Fotos al ingreso"],
+    ["fotosDurante", "Durante la reparacion"],
+    ["fotosListo", "Equipo terminado"],
+  ];
+
+  const toDataURLSafe = (src) => new Promise((res) => {
+    if (typeof src !== "string") return res(null);
+    if (src.startsWith("data:")) return res(src);
+    // blob: u otra URL -> intentar cargar y convertir
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = img.width; c.height = img.height;
+        c.getContext("2d").drawImage(img, 0, 0);
+        res(c.toDataURL("image/jpeg", 0.85));
+      } catch (_) { res(null); }
+    };
+    img.onerror = () => res(null);
+    img.src = src;
+  });
+
+  const tieneAlgunaFoto = gruposFotos.some(([k]) => (order[k] || []).length > 0);
+  if (tieneAlgunaFoto) {
+    d.addPage(); y = 18;
+    txt("FOTOS DE LA ORDEN", M, y, { size: 12, bold: true, color: "#0369A1" });
+    y += 4; ln(M, y, W - M, y, "#BAE6FD"); y += 8;
+
+    // Grilla 2 columnas
+    const cols = 2;
+    const gap = 6;
+    const cellW = (W - M * 2 - gap * (cols - 1)) / cols; // ancho disponible para cada foto
+    const cellH = 60; // alto fijo de cada celda
+
+    for (const [key, lbl] of gruposFotos) {
+      const arr = order[key] || [];
+      if (!arr.length) continue;
+
+      chk(14);
+      txt(lbl + "  (" + arr.length + ")", M, y, { size: 9, bold: true, color: "#0F172A" });
+      y += 6;
+
+      let col = 0;
+      let rowTop = y;
+      for (let i = 0; i < arr.length; i++) {
+        if (col === 0) {
+          // antes de iniciar una nueva fila, chequear espacio
+          if (rowTop + cellH + 4 > 285) { d.addPage(); rowTop = 18; }
+        }
+        const x = M + col * (cellW + gap);
+        const data = await toDataURLSafe(arr[i]);
+        if (data) {
+          // marco
+          d.setDrawColor("#CBD5E1");
+          d.rect(x, rowTop, cellW, cellH);
+          try {
+            // detectar formato por prefijo
+            const fmt = data.startsWith("data:image/png") ? "PNG" : "JPEG";
+            d.addImage(data, fmt, x + 1, rowTop + 1, cellW - 2, cellH - 2, undefined, "FAST");
+          } catch (_) {
+            txt("(no se pudo insertar)", x + 3, rowTop + cellH / 2, { size: 7, color: "#94A3B8" });
+          }
+        } else {
+          d.setDrawColor("#CBD5E1");
+          d.rect(x, rowTop, cellW, cellH);
+          txt("(imagen no disponible)", x + 3, rowTop + cellH / 2, { size: 7, color: "#94A3B8" });
+        }
+
+        col++;
+        if (col === cols || i === arr.length - 1) {
+          rowTop += cellH + 4;
+          col = 0;
+        }
+      }
+      y = rowTop + 4;
+    }
+  }
+
   d.save("RepPC_" + order.id + "_" + order.nombre.replace(/\s/g, "_") + ".pdf");
 }
 
@@ -449,13 +533,39 @@ export default function RepPCCore({ viewMode = "both" }) {
     catch (e) { console.error("Error eliminando:", e); alert("Error al eliminar."); }
   }
 
-  function fotoF(key, files) {
-    const u = Array.from(files).map(f => URL.createObjectURL(f));
+  // Convierte un File a dataURL (base64) y lo redimensiona para no inflar Firestore.
+  // Devuelve JPEG ~1280px del lado mayor, calidad 0.8.
+  function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 1280;
+          let w = img.width, h = img.height;
+          if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+          else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d").drawImage(img, 0, 0, w, h);
+          try { resolve(c.toDataURL("image/jpeg", 0.8)); }
+          catch (e) { resolve(r.result); }
+        };
+        img.onerror = () => resolve(r.result);
+        img.src = r.result;
+      };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function fotoF(key, files) {
+    const u = await Promise.all(Array.from(files).map(fileToDataURL));
     setForm(f => ({ ...f, [key]: [...f[key], ...u] }));
   }
 
-  function fotoO(id, key, files) {
-    const u = Array.from(files).map(f => URL.createObjectURL(f));
+  async function fotoO(id, key, files) {
+    const u = await Promise.all(Array.from(files).map(fileToDataURL));
     const o = getO(id);
     if (o) updO(id, { [key]: [...(o[key] || []), ...u] });
   }
