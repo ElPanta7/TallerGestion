@@ -105,11 +105,6 @@ function now() {
 function estadoLabel(key) { return ESTADOS.find(e => e.key === key)?.label || key; }
 
 async function generarPDF(order) {
-  if (!window.jspdf) {
-    alert("PDF library not loaded");
-    return null;
-  }
-}
   const { jsPDF } = window.jspdf;
   const d = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = 210, M = 18; let y = 0;
@@ -200,46 +195,6 @@ async function generarPDF(order) {
   }
   ln(W - M - 58, y + 24, W - M, y + 24, "#94A3B8");
   txt("Firma del tecnico / RepPC", W - M - 2, y + 29, { size: 7, color: "#94A3B8", align: "right" });
-
-  // FOTOS
-  const fotos = [
-    { key: "fotosRecepcion", label: "FOTOS DE INGRESO" },
-    { key: "fotosDurante", label: "FOTOS DURANTE REPARACION" },
-    { key: "fotosListo", label: "FOTOS EQUIPO REPARADO" }
-  ];
-
-  for (const foto of fotos) {
-    const imgs = order[foto.key] || [];
-    if (imgs.length > 0) {
-      chk(30);
-      txt(foto.label, M, y, { size: 8, bold: true, color: "#0369A1" }); y += 8;
-      
-      let xPos = M;
-      let maxHeight = 0;
-      
-      for (let i = 0; i < imgs.length; i++) {
-        try {
-          const imgWidth = 40;
-          const imgHeight = 40;
-          
-          if (xPos + imgWidth > W - M) {
-            y += maxHeight + 5;
-            xPos = M;
-            maxHeight = 0;
-            chk(50);
-          }
-          
-          d.addImage(imgs[i], "JPEG", xPos, y, imgWidth, imgHeight);
-          xPos += imgWidth + 5;
-          maxHeight = Math.max(maxHeight, imgHeight);
-        } catch (e) {
-          console.error("Error adding image:", e);
-        }
-      }
-      
-      y += maxHeight + 10;
-    }
-  }
 
   d.save("RepPC_" + order.id + "_" + order.nombre.replace(/\s/g, "_") + ".pdf");
 }
@@ -494,53 +449,15 @@ export default function RepPCCore({ viewMode = "both" }) {
     catch (e) { console.error("Error eliminando:", e); alert("Error al eliminar."); }
   }
 
-
-  async function fotoF(key, files) {
-    if (!files || files.length === 0) return;
-    const fileArray = Array.from(files);
-    const base64Array = [];
-    
-    for (let i = 0; i < fileArray.length; i++) {
-      try {
-        const file = fileArray[i];
-        const base64 = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(file);
-        });
-        base64Array.push(base64);
-      } catch (e) {
-        console.error("Error converting photo:", e);
-      }
-    }
-    
-    setForm(f => ({ ...f, [key]: [...f[key], ...base64Array] }));
+  function fotoF(key, files) {
+    const u = Array.from(files).map(f => URL.createObjectURL(f));
+    setForm(f => ({ ...f, [key]: [...f[key], ...u] }));
   }
 
-  async function fotoO(id, key, files) {
-    if (!files || files.length === 0) return;
-    
-    const fileArray = Array.from(files);
-    const base64Array = [];
-    
-    for (let i = 0; i < fileArray.length; i++) {
-      try {
-        const file = fileArray[i];
-        const base64 = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(file);
-        });
-        base64Array.push(base64);
-      } catch (e) {
-        console.error("Error converting photo:", e);
-      }
-    }
-    
+  function fotoO(id, key, files) {
+    const u = Array.from(files).map(f => URL.createObjectURL(f));
     const o = getO(id);
-    if (o) {
-      updO(id, { [key]: [...(o[key] || []), ...base64Array] });
-    }
+    if (o) updO(id, { [key]: [...(o[key] || []), ...u] });
   }
 
   async function createOrder() {
@@ -745,10 +662,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                       <label>Fotos en recepcion</label>
                       <div className="cam-picker">
                         <label style={{ flex: 1 }} className="pa" htmlFor="fR-cam">
-                          📷<input id="fR-cam" type="file" accept="image/*" capture="environment" onChange={e => fotoF("fotosRecepcion", e.target.files).catch(err => console.error("Error:", err))} />
+                          📷<input id="fR-cam" type="file" accept="image/*" capture="environment" onChange={e => fotoF("fotosRecepcion", e.target.files)} />
                         </label>
                         <label style={{ flex: 1 }} className="pa" htmlFor="fR-gal">
-                          🖼️<input id="fR-gal" type="file" accept="image/*" multiple onChange={e => fotoF("fotosRecepcion", e.target.files).catch(err => console.error("Error:", err))} />
+                          🖼️<input id="fR-gal" type="file" accept="image/*" multiple onChange={e => fotoF("fotosRecepcion", e.target.files)} />
                         </label>
                       </div>
                       <div className="pr">
@@ -917,10 +834,10 @@ export default function RepPCCore({ viewMode = "both" }) {
                       <div className="plbl">{lbl}</div>
                       <div className="cam-picker">
                         <label style={{ flex: 1 }} className="pa" htmlFor={"ph-" + key + "-cam"}>
-                          📷<input id={"ph-" + key + "-cam"} type="file" accept="image/*" capture="environment" onChange={e => fotoO(selO.id, key, e.target.files).catch(err => console.error("Error:", err))} />
+                          📷<input id={"ph-" + key + "-cam"} type="file" accept="image/*" capture="environment" onChange={e => fotoO(selO.id, key, e.target.files)} />
                         </label>
                         <label style={{ flex: 1 }} className="pa" htmlFor={"ph-" + key + "-gal"}>
-                          🖼️<input id={"ph-" + key + "-gal"} type="file" accept="image/*" multiple onChange={e => fotoO(selO.id, key, e.target.files).catch(err => console.error("Error:", err))} />
+                          🖼️<input id={"ph-" + key + "-gal"} type="file" accept="image/*" multiple onChange={e => fotoO(selO.id, key, e.target.files)} />
                         </label>
                       </div>
                       <div className="pr">
