@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { db } from './firebase';
+import { db, storage } from './firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const TALLER = {
   nombre: "RepPC",
@@ -195,6 +196,46 @@ async function generarPDF(order) {
   }
   ln(W - M - 58, y + 24, W - M, y + 24, "#94A3B8");
   txt("Firma del tecnico / RepPC", W - M - 2, y + 29, { size: 7, color: "#94A3B8", align: "right" });
+
+  // FOTOS
+  const fotos = [
+    { key: "fotosRecepcion", label: "FOTOS DE INGRESO" },
+    { key: "fotosDurante", label: "FOTOS DURANTE REPARACION" },
+    { key: "fotosListo", label: "FOTOS EQUIPO REPARADO" }
+  ];
+
+  for (const foto of fotos) {
+    const imgs = order[foto.key] || [];
+    if (imgs.length > 0) {
+      chk(30);
+      txt(foto.label, M, y, { size: 8, bold: true, color: "#0369A1" }); y += 8;
+      
+      let xPos = M;
+      let maxHeight = 0;
+      
+      for (let i = 0; i < imgs.length; i++) {
+        try {
+          const imgWidth = 40;
+          const imgHeight = 40;
+          
+          if (xPos + imgWidth > W - M) {
+            y += maxHeight + 5;
+            xPos = M;
+            maxHeight = 0;
+            chk(50);
+          }
+          
+          d.addImage(imgs[i], "JPEG", xPos, y, imgWidth, imgHeight);
+          xPos += imgWidth + 5;
+          maxHeight = Math.max(maxHeight, imgHeight);
+        } catch (e) {
+          console.error("Error adding image:", e);
+        }
+      }
+      
+      y += maxHeight + 10;
+    }
+  }
 
   d.save("RepPC_" + order.id + "_" + order.nombre.replace(/\s/g, "_") + ".pdf");
 }
@@ -449,15 +490,50 @@ export default function RepPCCore({ viewMode = "both" }) {
     catch (e) { console.error("Error eliminando:", e); alert("Error al eliminar."); }
   }
 
-  function fotoF(key, files) {
-    const u = Array.from(files).map(f => URL.createObjectURL(f));
-    setForm(f => ({ ...f, [key]: [...f[key], ...u] }));
+
+  async function fotoF(key, files) {
+    const fileArray = Array.from(files);
+    const urls = [];
+    
+    for (let i = 0; i < fileArray.length; i++) {
+      try {
+        const file = fileArray[i];
+        const timestamp = Date.now();
+        const filename = `${key}_${timestamp}_${i}.jpg`;
+        const storageRef = ref(storage, `temp/${filename}`);
+        
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        urls.push(downloadURL);
+      } catch (e) {
+        console.error("Error uploading foto:", e);
+      }
+    }
+    
+    setForm(f => ({ ...f, [key]: [...f[key], ...urls] }));
   }
 
-  function fotoO(id, key, files) {
-    const u = Array.from(files).map(f => URL.createObjectURL(f));
+  async function fotoO(id, key, files) {
+    const fileArray = Array.from(files);
+    const urls = [];
+    
+    for (let i = 0; i < fileArray.length; i++) {
+      try {
+        const file = fileArray[i];
+        const timestamp = Date.now();
+        const filename = `${id}_${key}_${timestamp}_${i}.jpg`;
+        const storageRef = ref(storage, `orders/${id}/${filename}`);
+        
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        urls.push(downloadURL);
+      } catch (e) {
+        console.error("Error uploading foto:", e);
+      }
+    }
+    
     const o = getO(id);
-    if (o) updO(id, { [key]: [...(o[key] || []), ...u] });
+    if (o) updO(id, { [key]: [...(o[key] || []), ...urls] });
   }
 
   async function createOrder() {
