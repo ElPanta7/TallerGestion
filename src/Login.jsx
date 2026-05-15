@@ -14,6 +14,7 @@ export default function Login() {
     e.preventDefault();
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
       localStorage.setItem('adminAuth', 'true');
+      localStorage.setItem('adminAuthTime', Date.now().toString());
       navigate('/admin');
     } else {
       setError('Usuario o contraseña incorrectos');
