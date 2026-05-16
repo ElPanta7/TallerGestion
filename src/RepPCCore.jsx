@@ -322,6 +322,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fn);min-height:100vh
 .cdv{color:var(--mu);font-size:13px;}
 .cdt{color:var(--mu);font-size:11px;margin-top:5px;}
 .cst{display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:var(--s2);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;}
+.cinfo{margin-top:10px;padding:10px 12px;background:rgba(6,182,212,.06);border-left:3px solid var(--cy);border-radius:8px;display:flex;flex-direction:column;gap:5px;}
+.cinfo-row{display:flex;gap:6px;font-size:12px;line-height:1.4;flex-wrap:wrap;}
+.cinfo-lbl{color:var(--mu);font-weight:600;flex-shrink:0;}
+.cinfo-val{color:var(--wh);flex:1;word-break:break-word;}
+.cinfo-money{color:#6EE7B7;font-weight:700;font-family:var(--mo);}
 .bdg{display:inline-flex;align-items:center;gap:3px;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:700;margin-left:4px;}
 .bdg.b-go{background:var(--go);color:#0A1628;}
 .bdg.b-bl{background:#0369A1;color:#E0F2FE;}
@@ -332,6 +337,13 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fn);min-height:100vh
 .back{background:var(--s2);border:1px solid var(--bd);color:var(--tx);width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;}
 .back:hover{border-color:var(--cy);}
 .iblk{background:var(--s2);border-radius:12px;padding:14px;margin:0 14px 12px;border:1px solid var(--bd);}
+.iedit-btn{position:absolute;top:10px;right:10px;background:rgba(6,182,212,.15);border:1px solid var(--cy);color:var(--cy);font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;}
+.iedit-btn:hover{background:rgba(6,182,212,.25);}
+.iedit-row{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-bottom:1px solid var(--bd);}
+.iedit-row:last-of-type{border-bottom:none;}
+.iedit-inp{width:100%;background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--wh);outline:none;font-family:inherit;}
+.iedit-inp:focus{border-color:var(--cy);}
+.iedit-ta{resize:vertical;min-height:60px;line-height:1.4;}
 .irow{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bd);font-size:14px;gap:12px;}
 .irow:last-child{border-bottom:none;}
 .ik{color:var(--mu);flex-shrink:0;}
@@ -475,6 +487,8 @@ export default function RepPCCore({ viewMode = "both" }) {
   const [showSigTecnico, setShowSigTecnico] = useState(false);
   const [accelClicks, setAccelClicks] = useState(0);
   const [mesFilter, setMesFilter] = useState("todos");
+  const [editDatos, setEditDatos] = useState(false);
+  const [editForm, setEditForm] = useState(null);
 
   const [form, setForm] = useState({
     nombre: "", telefono: "", marca: "", problema: "", accesorios: "", notas: "",
@@ -501,6 +515,12 @@ export default function RepPCCore({ viewMode = "both" }) {
     });
     return () => unsubscribe();
   }, []);
+
+  // Al cambiar de orden seleccionada, salir del modo edicion
+  useEffect(() => {
+    setEditDatos(false);
+    setEditForm(null);
+  }, [selId]);
 
   const uf = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const getO = id => orders.find(x => x.id === id);
@@ -702,6 +722,32 @@ export default function RepPCCore({ viewMode = "both" }) {
                         ? <div className="empty"><div className="ei">📭</div><p className="emp">No hay ordenes{statusFilter !== "todos" ? " en este estado" : ""}.<br />Presiona + para crear una.</p></div>
                         : filtByStatus.map(o => {
                           const est = ESTADOS.find(e => e.key === o.estado);
+                          // Info contextual segun el estado
+                          const infoContextual = (() => {
+                            const items = [];
+                            const corto = (s, n = 90) => {
+                              if (!s) return "";
+                              const t = String(s).trim();
+                              return t.length > n ? t.slice(0, n) + "..." : t;
+                            };
+                            if (o.estado === "recibido") {
+                              if (o.problema) items.push({ lbl: "Problema", val: corto(o.problema) });
+                            } else if (o.estado === "diagnostico") {
+                              if (o.problema) items.push({ lbl: "Problema", val: corto(o.problema) });
+                              if (o.diagnostico) items.push({ lbl: "Diagnostico", val: corto(o.diagnostico) });
+                            } else if (o.estado === "presupuesto") {
+                              if (o.diagnostico) items.push({ lbl: "Diagnostico", val: corto(o.diagnostico) });
+                              if (o.presupuestoMonto) items.push({ lbl: "Presupuesto", val: fmt(Number(o.presupuestoMonto) || 0), money: true });
+                            } else if (o.estado === "reparacion") {
+                              if (o.diagnostico) items.push({ lbl: "Diagnostico", val: corto(o.diagnostico) });
+                              if (o.presupuestoMonto) items.push({ lbl: "Aceptado", val: fmt(Number(o.presupuestoMonto) || 0), money: true });
+                            } else if (o.estado === "listo" || o.estado === "entregado") {
+                              if (o.trabajoRealizado) items.push({ lbl: "Reparacion", val: corto(o.trabajoRealizado) });
+                              const monto = o.costoFinal || o.presupuestoMonto;
+                              if (monto) items.push({ lbl: "Precio final", val: fmt(Number(monto) || 0), money: true });
+                            }
+                            return items;
+                          })();
                           return (
                             <div key={o.id} className="card" onClick={() => { setSelId(o.id); setAdminTab("detail"); }}>
                               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -714,6 +760,16 @@ export default function RepPCCore({ viewMode = "both" }) {
                               <div className="cnm">{o.nombre}</div>
                               <div className="cdv">{o.marca}</div>
                               <span className="cst" style={{ color: est?.color }}>{est?.icon} {est?.label}</span>
+                              {infoContextual.length > 0 && (
+                                <div className="cinfo">
+                                  {infoContextual.map((it, i) => (
+                                    <div key={i} className="cinfo-row">
+                                      <span className="cinfo-lbl">{it.lbl}:</span>
+                                      <span className={"cinfo-val" + (it.money ? " cinfo-money" : "")}>{it.val}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                               <div className="cdt">{o.fecha}</div>
                             </div>
                           );
@@ -862,13 +918,73 @@ export default function RepPCCore({ viewMode = "both" }) {
                     </div>
                   </div>
 
-                  <div className="iblk">
-                    {[["Equipo", selO.marca], ["Telefono", selO.telefono || "-"], ["Problema", selO.problema || "-"], ["Accesorios", selO.accesorios || "-"], ["Notas", selO.notas || "-"], ["Ingreso", selO.fecha]].map(([l, v]) => (
-                      <div key={l} className="irow"><span className="ik">{l}</span><span className="iv">{v}</span></div>
-                    ))}
-                    {selO.firmaCliente && <div className="irow"><span className="ik">Firma cliente</span><span className="iv"><img src={selO.firmaCliente} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
-                    {selO.firmaTecnico && <div className="irow"><span className="ik">Firma tecnico</span><span className="iv"><img src={selO.firmaTecnico} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
-                  </div>
+                  {/* DATOS DE LA ORDEN - editables */}
+                  {editDatos ? (
+                    <div className="iblk" style={{ paddingBottom: 12 }}>
+                      <div className="iedit-row">
+                        <span className="ik">Equipo</span>
+                        <input className="iedit-inp" value={editForm.marca || ""} onChange={e => setEditForm(f => ({ ...f, marca: e.target.value }))} placeholder="Marca / modelo" />
+                      </div>
+                      <div className="iedit-row">
+                        <span className="ik">Telefono</span>
+                        <input className="iedit-inp" value={editForm.telefono || ""} onChange={e => setEditForm(f => ({ ...f, telefono: e.target.value }))} placeholder="Telefono" />
+                      </div>
+                      <div className="iedit-row">
+                        <span className="ik">Problema</span>
+                        <textarea className="iedit-inp iedit-ta" value={editForm.problema || ""} onChange={e => setEditForm(f => ({ ...f, problema: e.target.value }))} placeholder="Problema reportado" rows={2} />
+                      </div>
+                      <div className="iedit-row">
+                        <span className="ik">Accesorios</span>
+                        <input className="iedit-inp" value={editForm.accesorios || ""} onChange={e => setEditForm(f => ({ ...f, accesorios: e.target.value }))} placeholder="Accesorios entregados" />
+                      </div>
+                      <div className="iedit-row">
+                        <span className="ik">Notas</span>
+                        <textarea className="iedit-inp iedit-ta" value={editForm.notas || ""} onChange={e => setEditForm(f => ({ ...f, notas: e.target.value }))} placeholder="Notas internas" rows={2} />
+                      </div>
+                      <div className="iedit-row">
+                        <span className="ik">Nombre</span>
+                        <input className="iedit-inp" value={editForm.nombre || ""} onChange={e => setEditForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Nombre del cliente" />
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 12, padding: "0 14px" }}>
+                        <button
+                          className="btn b-re"
+                          style={{ flex: 1 }}
+                          onClick={() => { setEditDatos(false); setEditForm(null); }}
+                        >Cancelar</button>
+                        <button
+                          className="btn b-cy"
+                          style={{ flex: 1 }}
+                          onClick={() => {
+                            const cambios = {
+                              nombre: (editForm.nombre || "").trim() || selO.nombre,
+                              marca: (editForm.marca || "").trim(),
+                              telefono: (editForm.telefono || "").trim(),
+                              problema: (editForm.problema || "").trim(),
+                              accesorios: (editForm.accesorios || "").trim(),
+                              notas: (editForm.notas || "").trim(),
+                            };
+                            updO(selO.id, cambios);
+                            addEv(selO.id, "✏️", "Admin edito datos de la orden");
+                            setEditDatos(false);
+                            setEditForm(null);
+                          }}
+                        >Guardar cambios</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="iblk" style={{ position: "relative" }}>
+                      <button
+                        className="iedit-btn"
+                        title="Editar datos"
+                        onClick={() => { setEditForm({ nombre: selO.nombre, marca: selO.marca, telefono: selO.telefono || "", problema: selO.problema || "", accesorios: selO.accesorios || "", notas: selO.notas || "" }); setEditDatos(true); }}
+                      >✏️ Editar</button>
+                      {[["Equipo", selO.marca], ["Telefono", selO.telefono || "-"], ["Problema", selO.problema || "-"], ["Accesorios", selO.accesorios || "-"], ["Notas", selO.notas || "-"], ["Ingreso", selO.fecha]].map(([l, v]) => (
+                        <div key={l} className="irow"><span className="ik">{l}</span><span className="iv">{v}</span></div>
+                      ))}
+                      {selO.firmaCliente && <div className="irow"><span className="ik">Firma cliente</span><span className="iv"><img src={selO.firmaCliente} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
+                      {selO.firmaTecnico && <div className="irow"><span className="ik">Firma tecnico</span><span className="iv"><img src={selO.firmaTecnico} alt="" style={{ height: 30, borderRadius: 4 }} /></span></div>}
+                    </div>
+                  )}
 
                   {/* ESTADO */}
                   {/* PRIORIDAD - CONTROL ADMIN */}
