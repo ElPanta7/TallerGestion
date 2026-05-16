@@ -5,7 +5,7 @@ import ClientView from './ClientView';
 import Login from './Login';
 
 // Duración máxima de la sesión: 2 horas
-const SESSION_MAX_MS = 2 * 60 * 60 * 1000;
+const SESSION_MAX_MS = 8 * 60 * 60 * 1000;
 // Mostrar aviso cuando faltan 5 minutos
 const SESSION_WARN_MS = 5 * 60 * 1000;
 
